@@ -8,9 +8,9 @@
 """
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -20,6 +20,10 @@ import xacro
 def generate_launch_description():
     pkg = get_package_share_directory('smart_community_sim')
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
+
+    # 红绿灯插件 libTrafficLightSystem.so 装在 <prefix>/lib，
+    # 通过 GZ_SIM_SYSTEM_PLUGIN_PATH 让 gz-sim 能按文件名加载。
+    plugin_lib = os.path.join(get_package_prefix('smart_community_sim'), 'lib')
 
     world_file = os.path.join(pkg, 'worlds', 'smart_community.sdf')
     xacro_file = os.path.join(pkg, 'robot', 'robot.xacro')
@@ -75,6 +79,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
+        SetEnvironmentVariable('GZ_SIM_SYSTEM_PLUGIN_PATH', plugin_lib),
         gz_sim,
         robot_state_publisher,
         spawn,

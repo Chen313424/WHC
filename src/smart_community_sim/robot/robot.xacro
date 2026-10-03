@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+<!--
+  智慧社区 巡检机器人 (差分驱动)
+  传感器对齐总决赛要求：1 x 360° 激光雷达 + 1 x 单目相机
+  底盘由 gz-sim DiffDrive 插件驱动，odom -> base_footprint TF 由插件发布。
+-->
+<robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ===== 尺寸/质量参数 ===== -->
+  <xacro:property name="wheel_radius" value="0.05"/>
+  <xacro:property name="wheel_width" value="0.03"/>
+  <xacro:property name="wheel_separation" value="0.30"/>  <!-- 左右轮横向间距 -->
+  <xacro:property name="base_length" value="0.30"/>
+  <xacro:property name="base_width" value="0.20"/>
+  <xacro:property name="base_height" value="0.10"/>
+  <xacro:property name="caster_radius" value="0.025"/>
+
+  <xacro:property name="chassis_mass" value="3.0"/>
+  <xacro:property name="wheel_mass" value="0.2"/>
+
+  <material name="chassis_blue"><color rgba="0.1 0.3 0.8 1.0"/></material>
+  <material name="wheel_black"><color rgba="0.1 0.1 0.1 1.0"/></material>
+  <material name="sensor_grey"><color rgba="0.4 0.4 0.4 1.0"/></material>
+
+  <!-- ===== base_footprint（地面投影，供 Nav2/odom 使用） ===== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}"/>
+  </joint>
+
+  <!-- ===== base_link（底盘，中心位于轮轴高度） ===== -->
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+      <material name="chassis_blue"/>
+    </visual>
+    <collision>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="${chassis_mass}"/>
+      <inertia
+        ixx="${chassis_mass * (base_width*base_width + base_height*base_height) / 12}"
+        ixy="0" ixz="0"
+        iyy="${chassis_mass * (base_length*base_length + base_height*base_height) / 12}"
+        iyz="0"
+        izz="${chassis_mass * (base_length*base_length + base_width*base_width) / 12}"/>
+    </inertial>
+  </link>
+
+  <!-- ===== 驱动轮（圆柱绕 Y 轴旋转） ===== -->
+  <xacro:macro name="wheel" params="prefix reflect">
+    <link name="${prefix}_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="1.570796 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="wheel_black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="1.570796 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <inertia
+          ixx="${wheel_mass * wheel_radius*wheel_radius / 2}"
+          ixy="0" ixz="0"
+          iyy="${wheel_mass * (3*wheel_radius*wheel_radius + wheel_width*wheel_width) / 12}"
+          iyz="0"
+          izz="${wheel_mass * (3*wheel_radius*wheel_radius + wheel_width*wheel_width) / 12}"/>
+      </inertial>
+    </link>
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel"/>
+      <origin xyz="0 ${reflect * wheel_separation / 2} 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:wheel prefix="left" reflect="1"/>
+  <xacro:wheel prefix="right" reflect="-1"/>
+
+  <!-- ===== 后置万向轮（低摩擦，保持平衡） ===== -->
+  <link name="caster_link">
+    <visual>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+      <material name="sensor_grey"/>
+    </visual>
+    <collision>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+  </link>
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_link"/>
+    <origin xyz="${-base_length/2 + 0.03} 0 ${-(wheel_radius - caster_radius)}"/>
+  </joint>
+
+  <!-- 低摩擦，避免转向时被后轮卡住 -->
+  <gazebo reference="caster_link">
+    <mu1>0.0</mu1>
+    <mu2>0.0</mu2>
+  </gazebo>
+
+  <!-- ===== 激光雷达（360° 2D） ===== -->
+  <!-- 注意：传感器 link 必须带 inertial，否则 URDF->SDF 转换会丢弃空 link，
+       传感器被回退挂到根 link（base_footprint）。 -->
+  <link name="lidar_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0 0 ${base_height/2 + 0.02}"/>
+  </joint>
+
+  <!-- ===== 单目相机（前向） ===== -->
+  <link name="camera_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${base_length/2} 0 ${base_height/2 + 0.05}"/>
+  </joint>
+
+  <!-- ============================= Gazebo 插件 ============================= -->
+
+  <!-- 差分驱动：订阅 cmd_vel 驱动轮子。
+       自带的 odom/tf 帧名带 model 前缀（robot/odom），不方便对接 Nav2，
+       所以把它的 odom/tf 重定向到不用的 topic，改用下面的 OdometryPublisher。 -->
+  <gazebo>
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>${wheel_separation}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <odom_topic>/model/robot/diffdrive_odom</odom_topic>
+      <tf_topic>/model/robot/diffdrive_tf</tf_topic>
+      <child_frame_id>base_footprint</child_frame_id>
+    </plugin>
+  </gazebo>
+
+  <!-- 里程计 + odom->base_footprint TF（帧名干净：odom / base_footprint） -->
+  <gazebo>
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <odom_topic>/model/robot/odometry</odom_topic>
+      <tf_topic>/model/robot/tf</tf_topic>
+      <odom_publish_frequency>50</odom_publish_frequency>
+    </plugin>
+  </gazebo>
+
+  <!-- 关节状态（供可视化/调试） -->
+  <gazebo>
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher"/>
+  </gazebo>
+
+  <!-- 360° 激光雷达 -->
+  <gazebo reference="lidar_link">
+    <sensor type="gpu_lidar" name="lidar">
+      <update_rate>10</update_rate>
+      <always_on>1</always_on>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.1</min>
+          <max>12</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <visualize>false</visualize>
+    </sensor>
+  </gazebo>
+
+  <!-- 单目相机 -->
+  <gazebo reference="camera_link">
+    <sensor type="camera" name="camera">
+      <update_rate>30</update_rate>
+      <camera>
+        <horizontal_fov>1.0471975</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>100</far>
+        </clip>
+      </camera>
+      <always_on>1</always_on>
+    </sensor>
+  </gazebo>
+
+</robot>

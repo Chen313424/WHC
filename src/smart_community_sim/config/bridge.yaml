@@ -1,0 +1,51 @@
+# ROS2 <-> Gazebo 桥接配置（ros_gz_bridge YAML）
+#
+# frame_id 说明：
+#   Gazebo 传感器的数据帧名是 "<model>/<link>/<sensor>"（如 robot/base_footprint/lidar），
+#   这里用 frame_id 覆盖成 ROS 侧 TF 树里的帧名（lidar_link / camera_link），
+#   这样 SLAM/Nav2 直接可用，无需额外转换。
+
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/model/robot/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/odom"
+  gz_topic_name: "/model/robot/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/tf"
+  gz_topic_name: "/model/robot/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/scan"
+  gz_topic_name: "/world/smart_community/model/robot/link/base_footprint/sensor/lidar/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+  frame_id: "lidar_link"
+
+- ros_topic_name: "/camera/image_raw"
+  gz_topic_name: "/world/smart_community/model/robot/link/base_footprint/sensor/camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  frame_id: "camera_link"
+
+- ros_topic_name: "/camera/camera_info"
+  gz_topic_name: "/world/smart_community/model/robot/link/base_footprint/sensor/camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  frame_id: "camera_link"

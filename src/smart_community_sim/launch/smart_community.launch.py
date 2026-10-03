@@ -57,10 +57,10 @@ def generate_launch_description():
         parameters=[{
             'name': 'robot',
             'topic': 'robot_description',
-            'x': 0.0,
-            'y': 0.0,
+            'x': 32.0,
+            'y': 14.0,
             'z': 0.05,
-            'Y': 0.0,
+            'Y': 1.5708,
         }],
     )
 

@@ -1,23 +1,23 @@
 /*
- * 智慧社区红绿灯时序控制系统插件。
+ * 智慧社区红绿灯时序控制系统插件（统一时序：红灯10s / 绿灯15s / 黄灯3s）。
  *
  * 用法（写在世界 SDF 的 <world><plugin> 里）：
  *   <plugin filename="libTrafficLightSystem.so"
  *           name="gz::sim::systems::TrafficLight">
- *     <ns_prefix>traffic_light_ns</ns_prefix>   # 南北向红绿灯模型名前缀
- *     <ew_prefix>traffic_light_ew</ew_prefix>   # 东西向红绿灯模型名前缀
- *     <green_time>15</green_time>               # 绿灯时长（秒）
- *     <yellow_time>3</yellow_time>              # 黄灯时长（秒）
+ *     <prefix>traffic_light</prefix>   # 红绿灯模型名前缀
+ *     <green_time>15</green_time>      # 绿灯时长（秒）
+ *     <yellow_time>3</yellow_time>     # 黄灯时长（秒）
+ *     <red_time>10</red_time>          # 红灯时长（秒）
  *   </plugin>
  *
  * 约定：每个红绿灯模型内部，三盏灯泡是名为 red / yellow / green 的
- * <visual>。世界插件 Configure 阶段模型实体尚未创建，因此灯泡实体在
- * 首次 PreUpdate 时惰性发现，之后每个 PreUpdate 按当前仿真时间切换两组
- * 灯的 emissive/diffuse 颜色：
- *   NS 绿 -> NS 黄 -> EW 绿 -> EW 黄 -> 循环（红灯时长 = 对向绿+黄）。
+ * <visual>（名称固定，与灯泡在模型内的实际排列方向无关）。
+ * 世界插件 Configure 阶段模型实体尚未创建，因此灯泡实体在首次 PreUpdate
+ * 时惰性发现，之后每个 PreUpdate 按当前仿真时间统一切换所有灯：
+ *   绿(15s) -> 黄(3s) -> 红(10s) -> 循环
+ * 所有红绿灯同一时序（同步），仅按灯泡名称 red/yellow/green 上色。
  */
 #include <chrono>
-#include <cmath>
 #include <string>
 #include <vector>
 
@@ -39,16 +39,7 @@ namespace sim
 namespace systems
 {
 
-enum class Group { NS, EW };
 enum class Lamp { RED, YELLOW, GREEN };
-enum class State { RED, YELLOW, GREEN };
-
-struct Bulb
-{
-  Entity entity;
-  Group group;
-  Lamp lamp;
-};
 
 class TrafficLight
     : public System,
@@ -65,12 +56,14 @@ class TrafficLight
 
   private: void DiscoverBulbs(EntityComponentManager &_ecm);
 
-  private: std::vector<Bulb> bulbs_;
+  private: std::vector<Entity> red_;
+  private: std::vector<Entity> yellow_;
+  private: std::vector<Entity> green_;
   private: bool discovered_{false};
   private: double greenTime_{15.0};
   private: double yellowTime_{3.0};
-  private: std::string nsPrefix_{"traffic_light_ns"};
-  private: std::string ewPrefix_{"traffic_light_ew"};
+  private: double redTime_{10.0};
+  private: std::string prefix_{"traffic_light"};
 };
 
 namespace
@@ -107,15 +100,18 @@ void TrafficLight::Configure(const Entity &_entity,
     greenTime_ = _sdf->Get<double>("green_time");
   if (_sdf->HasElement("yellow_time"))
     yellowTime_ = _sdf->Get<double>("yellow_time");
-  if (_sdf->HasElement("ns_prefix"))
-    nsPrefix_ = _sdf->Get<std::string>("ns_prefix");
-  if (_sdf->HasElement("ew_prefix"))
-    ewPrefix_ = _sdf->Get<std::string>("ew_prefix");
+  if (_sdf->HasElement("red_time"))
+    redTime_ = _sdf->Get<double>("red_time");
+  if (_sdf->HasElement("prefix"))
+    prefix_ = _sdf->Get<std::string>("prefix");
 }
 
 void TrafficLight::DiscoverBulbs(EntityComponentManager &_ecm)
 {
-  bulbs_.clear();
+  red_.clear();
+  yellow_.clear();
+  green_.clear();
+
   _ecm.Each<components::Name, components::Visual>(
       [&](const Entity &_e, const components::Name *_name,
           const components::Visual *) -> bool
@@ -136,22 +132,21 @@ void TrafficLight::DiscoverBulbs(EntityComponentManager &_ecm)
           return true;
         const std::string modelName =
             _ecm.Component<components::Name>(model)->Data();
-
-        Group group;
-        if (StartsWith(modelName, nsPrefix_))
-          group = Group::NS;
-        else if (StartsWith(modelName, ewPrefix_))
-          group = Group::EW;
-        else
+        if (!StartsWith(modelName, prefix_))
           return true;
 
-        bulbs_.push_back({_e, group, lamp});
+        if (lamp == Lamp::RED)
+          red_.push_back(_e);
+        else if (lamp == Lamp::YELLOW)
+          yellow_.push_back(_e);
+        else
+          green_.push_back(_e);
         return true;
       });
 
-  gzdbg << "TrafficLight: 找到 " << bulbs_.size()
-        << " 盏灯 (NS prefix='" << nsPrefix_
-        << "', EW prefix='" << ewPrefix_ << "')\n";
+  gzdbg << "TrafficLight: 找到 " << (red_.size() + yellow_.size() + green_.size())
+        << " 盏灯 (red=" << red_.size() << ", yellow=" << yellow_.size()
+        << ", green=" << green_.size() << ", prefix='" << prefix_ << "')\n";
 }
 
 void TrafficLight::PreUpdate(const UpdateInfo &_info,
@@ -163,39 +158,23 @@ void TrafficLight::PreUpdate(const UpdateInfo &_info,
     discovered_ = true;
   }
 
-  if (bulbs_.empty())
+  if (red_.empty() && yellow_.empty() && green_.empty())
     return;
 
   const double t = std::chrono::duration<double>(_info.simTime).count();
-  const double cycle = 2.0 * (greenTime_ + yellowTime_);
+  const double cycle = greenTime_ + yellowTime_ + redTime_;
   double phase = std::fmod(t, cycle);
   if (phase < 0)
     phase += cycle;
 
-  // 相位：0~green=NS绿; green~green+yellow=NS黄;
-  //       green+yellow~2green+yellow=EW绿; 最后=EW黄。
-  State nsState;
-  State ewState;
+  // 相位：0~green=绿; green~green+yellow=黄; 其余=红。
+  Lamp active;
   if (phase < greenTime_)
-  {
-    nsState = State::GREEN;
-    ewState = State::RED;
-  }
+    active = Lamp::GREEN;
   else if (phase < greenTime_ + yellowTime_)
-  {
-    nsState = State::YELLOW;
-    ewState = State::RED;
-  }
-  else if (phase < 2 * greenTime_ + yellowTime_)
-  {
-    nsState = State::RED;
-    ewState = State::GREEN;
-  }
+    active = Lamp::YELLOW;
   else
-  {
-    nsState = State::RED;
-    ewState = State::YELLOW;
-  }
+    active = Lamp::RED;
 
   const gz::math::Color off(0.05f, 0.05f, 0.05f, 1.0f);
   const gz::math::Color offDiffuse(0.12f, 0.12f, 0.12f, 1.0f);
@@ -203,32 +182,21 @@ void TrafficLight::PreUpdate(const UpdateInfo &_info,
   const gz::math::Color yellow(1.0f, 0.75f, 0.0f, 1.0f);
   const gz::math::Color green(0.0f, 0.7f, 0.2f, 1.0f);
 
-  for (const auto &b : bulbs_)
+  auto apply = [&](const std::vector<Entity> &_bulbs,
+                   const gz::math::Color &_on, bool _active)
   {
-    const State s = (b.group == Group::NS) ? nsState : ewState;
-    bool on = false;
-    gz::math::Color color = off;
-    if (s == State::GREEN && b.lamp == Lamp::GREEN)
+    for (const Entity &e : _bulbs)
     {
-      on = true;
-      color = green;
+      sdf::Material mat;
+      mat.SetEmissive(_active ? _on : off);
+      mat.SetDiffuse(_active ? _on : offDiffuse);
+      _ecm.SetComponentData<components::Material>(e, mat);
     }
-    else if (s == State::YELLOW && b.lamp == Lamp::YELLOW)
-    {
-      on = true;
-      color = yellow;
-    }
-    else if (s == State::RED && b.lamp == Lamp::RED)
-    {
-      on = true;
-      color = red;
-    }
+  };
 
-    sdf::Material mat;
-    mat.SetEmissive(color);
-    mat.SetDiffuse(on ? color : offDiffuse);
-    _ecm.SetComponentData<components::Material>(b.entity, mat);
-  }
+  apply(red_, red, active == Lamp::RED);
+  apply(yellow_, yellow, active == Lamp::YELLOW);
+  apply(green_, green, active == Lamp::GREEN);
 }
 
 }  // namespace systems

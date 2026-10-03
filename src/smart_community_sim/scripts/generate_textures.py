@@ -214,7 +214,14 @@ def main():
     make_label(os.path.join(OUT, "label_parking.png"), "停车场")
     make_label(os.path.join(OUT, "label_trash.png"), "垃圾分类投放点")
     make_label(os.path.join(OUT, "label_ev.png"), "电动车停车区")
-    make_label(os.path.join(OUT, "label_start.png"), "出发区")
+    make_label(os.path.join(OUT, "label_start.png"), "起点/终点")
+    make_label(os.path.join(OUT, "label_street_a.png"), "A街区",
+               fg=(255, 255, 255), bg=(30, 90, 200))
+    make_label(os.path.join(OUT, "label_street_b.png"), "B街区",
+               fg=(255, 255, 255), bg=(30, 90, 200))
+    make_label(os.path.join(OUT, "label_spot_1.png"), "1号", bg=(60, 60, 60))
+    make_label(os.path.join(OUT, "label_spot_2.png"), "2号", bg=(60, 60, 60))
+    make_label(os.path.join(OUT, "label_spot_3.png"), "3号", bg=(60, 60, 60))
 
     # 人偶身份
     make_label(os.path.join(OUT, "label_community.png"), "社区人员",

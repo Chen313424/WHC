@@ -1,0 +1,9 @@
+# 训练侧依赖（装在训练机上，不是 VM 里）
+#
+# PyTorch 不在这里列：必须按你的 CUDA 版本单独装。
+# RTX 5060 是 Blackwell (sm_120)，需要 CUDA 12.8 及以上的 wheel，
+# 老版本 torch 会报 "no kernel image is available for execution"。
+# 一键配置见同目录的 setup_train_env.ps1。
+ultralytics>=8.3.0
+onnx>=1.16.0
+onnxruntime>=1.18.0

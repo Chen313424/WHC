@@ -1,0 +1,100 @@
+#cloud-config
+# =============================================================================
+#  本项目的 Ubuntu 24.04 无人值守安装配置（subiquity / autoinstall）
+#
+#  由 tools/build_vm.ps1 通过 VBoxManage 传入：
+#      VBoxManage unattended install <vm> --script-template=<本文件> ...
+#
+#  带双 @ 的 VBOX 标记是 VirtualBox 的替换点与条件块，必须原样保留。
+#  坑：注释里也不能出现完整的占位符字面量，否则 VBoxManage 会把它当占位符解析，
+#  报 "Malformed or too long template placeholder"。
+#
+#  相比 VirtualBox 自带模板，这里额外做了三件事：
+#    1. apt 走清华镜像（guest 里也要快，否则 build-essential/dkms 要装很久）
+#    2. 直接装 openssh-server 并预置宿主机的公钥
+#       -> 装完就能从宿主 127.0.0.1:2222 SSH 进去，不依赖 Guest Additions
+#    3. 预装编译红绿灯 C++ 插件和 ROS 2 所需的基础依赖
+# =============================================================================
+autoinstall:
+  version: 1
+
+  apt:
+    # 网络失败时回退到 ISO 内置包，保证无人值守不会卡死
+    fallback: offline-install
+    preserve_sources_list: false
+    geoip: false
+    primary:
+      - arches: [default]
+        uri: "https://mirrors.tuna.tsinghua.edu.cn/ubuntu"
+
+  locale: @@VBOX_INSERT_LOCALE@@
+  keyboard:
+    layout: us
+  shutdown: reboot
+
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+@@VBOX_COND_HAS_PROXY@@
+  proxy: @@VBOX_INSERT_PROXY@@
+@@VBOX_COND_END@@
+
+  # SSH：装完即可从宿主机登录，这是后续所有自动化的通道
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGXFuF7R6d3kJRQ9qTECbU+bmKmzMRfroMo/Jyt6weJ7 whc-host"
+
+  packages:
+    - openssh-server
+    - curl
+    - wget
+    - gnupg
+    - ca-certificates
+    - rsync
+    - git
+    - build-essential
+    - linux-headers-generic
+    - dkms
+    - perl
+    - make
+    - python3-pip
+    - python3-yaml
+    - software-properties-common
+@@VBOX_COND_IS_INSTALLING_ADDITIONS@@
+    - build-essential
+    - linux-headers-generic
+    - perl
+    - make
+    - dkms
+@@VBOX_COND_END@@
+
+  identity:
+    hostname: '@@VBOX_INSERT_HOSTNAME_WITHOUT_DOMAIN@@'
+    username: '@@VBOX_INSERT_USER_LOGIN@@'
+    realname: '@@VBOX_INSERT_USER_FULL_NAME@@'
+    password: '@@VBOX_INSERT_USER_PASSWORD_SHACRYPT512@@'
+
+  user-data:
+@@VBOX_COND_IS_RTC_USING_UTC@@
+    timezone: Etc/UTC
+@@VBOX_COND_ELSE@@
+    timezone: @@VBOX_INSERT_TIME_ZONE_UX@@
+@@VBOX_COND_END@@
+    ntp:
+      enabled: true
+    # 注意：这里【不能】写 sudo: —— subiquity 的 schema 校验会报
+    #   "autoinstall.user-data.sudo: Additional properties are not allowed"
+    # 并直接中止整个无人值守安装。免密 sudo 改由 tools/provision_vm.ps1
+    # 在首次 SSH 登录后写入 /etc/sudoers.d/90-whc。
+
+  late-commands:
+@@VBOX_COND_IS_ROOT_PASSWORD_SET@@
+    - curtin in-target --target=/target -- sh -c 'printf "%s\n" '\''root:@@VBOX_INSERT_ROOT_PASSWORD_SHACRYPT512@@'\'' | chpasswd -e'
+@@VBOX_COND_END@@
+    - cp /cdrom/vboxpostinstall.sh /target/root/vboxpostinstall.sh
+    - chmod +x /target/root/vboxpostinstall.sh
+    - curtin in-target --target=/target -- /bin/bash /root/vboxpostinstall.sh --direct

@@ -1,0 +1,58 @@
+# 感知与控制节点参数（ROS 2 参数文件，按节点名分节）
+#
+# 调参速查
+# --------
+# 红灯停得太早/太晚  -> 改 /traffic_controller 的 stop_distance_m
+# 漏检               -> 降 /yolo_detector 的 conf（如 0.25）
+# 误检太多           -> 升 conf（如 0.45）或升 min_score
+# 车在路口前“瞎停”   -> 检查 roi_x_ratio（只信画面中央的红绿灯）
+# 推理太慢           -> 降 imgsz 到 416/320，或降 min_interval 限频
+
+/yolo_detector:
+  ros__parameters:
+    # 留空 = 用包内 share/smart_community_perception/models/whc_yolo.pt
+    model_path: ""
+    image_topic: "/camera/image_raw"
+    detections_topic: "/perception/detections"
+    debug_image_topic: "/perception/debug_image"
+    conf: 0.35
+    iou: 0.5
+    imgsz: 640
+    max_det: 50
+    device: ""          # "" 自动；"cpu" 强制 CPU；"0" 指定第一块 GPU
+    half: false         # GPU 上可开 FP16 提速
+    publish_debug_image: true
+    publish_vision_msgs: true
+    min_interval: 0.0   # >0 时限频，例如 0.1 = 最多 10Hz
+
+/traffic_controller:
+  ros__parameters:
+    # teleop_gate: 人遥控，红灯自动接管刹车（推荐）
+    # auto       : 自己直行，红灯停绿灯走
+    mode: "teleop_gate"
+
+    input_topic: "/cmd_vel_input"
+    output_topic: "/cmd_vel"
+    detections_topic: "/perception/detections"
+    camera_info_topic: "/camera/camera_info"
+    status_topic: "/perception/traffic_decision"
+
+    cruise_speed: 0.6          # auto 模式直行速度 (m/s)
+    approach_speed: 0.25       # 红灯减速接近速度 (m/s)
+    stop_distance_m: 5.0       # 距红绿灯 <= 此值且为红灯 -> 停车
+    slow_distance_m: 9.0       # 距红绿灯 <= 此值且为红灯 -> 减速
+    roi_x_ratio: 0.6           # 只看画面中央 60% 宽度的红绿灯
+    min_score: 0.35
+    yellow_policy: "stop_if_far"   # stop_if_far | always_stop
+
+    avoid_person: false            # 是否顺带实现“前方有人就停”
+    person_danger_distance_m: 3.0
+
+    fail_safe: "go"            # 检测超时时的兜底：go | stop
+    detection_timeout: 0.7     # 秒；超过这么久没有新检测就启用兜底
+
+    publish_rate: 20.0
+    # 与 robot.xacro 对齐：640x480, horizontal_fov=1.0471975
+    image_width: 640
+    image_height: 480
+    hfov: 1.0471975

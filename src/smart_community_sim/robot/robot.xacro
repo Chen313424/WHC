@@ -6,14 +6,14 @@
 -->
 <robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- ===== 尺寸/质量参数 ===== -->
-  <xacro:property name="wheel_radius" value="0.05"/>
-  <xacro:property name="wheel_width" value="0.03"/>
-  <xacro:property name="wheel_separation" value="0.30"/>  <!-- 左右轮横向间距 -->
-  <xacro:property name="base_length" value="0.30"/>
-  <xacro:property name="base_width" value="0.20"/>
-  <xacro:property name="base_height" value="0.10"/>
-  <xacro:property name="caster_radius" value="0.025"/>
+  <!-- ===== 尺寸/质量参数（省赛 4.2m 场地，缩小底盘以便通过 40cm 车道） ===== -->
+  <xacro:property name="wheel_radius" value="0.03"/>
+  <xacro:property name="wheel_width" value="0.02"/>
+  <xacro:property name="wheel_separation" value="0.18"/>  <!-- 左右轮横向间距 -->
+  <xacro:property name="base_length" value="0.20"/>
+  <xacro:property name="base_width" value="0.14"/>
+  <xacro:property name="base_height" value="0.08"/>
+  <xacro:property name="caster_radius" value="0.02"/>
 
   <xacro:property name="chassis_mass" value="3.0"/>
   <xacro:property name="wheel_mass" value="0.2"/>
@@ -191,7 +191,7 @@
         </scan>
         <range>
           <min>0.1</min>
-          <max>12</max>
+          <max>6</max>
           <resolution>0.01</resolution>
         </range>
       </ray>
@@ -204,14 +204,14 @@
     <sensor type="camera" name="camera">
       <update_rate>30</update_rate>
       <camera>
-        <horizontal_fov>1.0471975</horizontal_fov>
+        <horizontal_fov>1.745329</horizontal_fov>
         <image>
           <width>640</width>
           <height>480</height>
         </image>
         <clip>
           <near>0.05</near>
-          <far>100</far>
+          <far>10</far>
         </clip>
       </camera>
       <always_on>1</always_on>

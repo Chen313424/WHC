@@ -1,12 +1,12 @@
 /*
- * 智慧社区红绿灯时序控制系统插件（统一时序：红灯10s / 绿灯15s / 黄灯3s）。
+ * 智慧社区红绿灯时序控制系统插件（统一时序：红灯10s / 绿灯15s / 黄灯5s）。
  *
  * 用法（写在世界 SDF 的 <world><plugin> 里）：
  *   <plugin filename="libTrafficLightSystem.so"
  *           name="gz::sim::systems::TrafficLight">
  *     <prefix>traffic_light</prefix>   # 红绿灯模型名前缀
  *     <green_time>15</green_time>      # 绿灯时长（秒）
- *     <yellow_time>3</yellow_time>     # 黄灯时长（秒）
+ *     <yellow_time>5</yellow_time>     # 黄灯时长（秒）
  *     <red_time>10</red_time>          # 红灯时长（秒）
  *   </plugin>
  *
@@ -14,7 +14,7 @@
  * <visual>（名称固定，与灯泡在模型内的实际排列方向无关）。
  * 世界插件 Configure 阶段模型实体尚未创建，因此灯泡实体在首次 PreUpdate
  * 时惰性发现，之后每个 PreUpdate 按当前仿真时间统一切换所有灯：
- *   绿(15s) -> 黄(3s) -> 红(10s) -> 循环
+ *   绿(15s) -> 黄(5s) -> 红(10s) -> 循环
  * 所有红绿灯同一时序（同步），仅按灯泡名称 red/yellow/green 上色。
  */
 #include <chrono>
@@ -61,7 +61,7 @@ class TrafficLight
   private: std::vector<Entity> green_;
   private: bool discovered_{false};
   private: double greenTime_{15.0};
-  private: double yellowTime_{3.0};
+  private: double yellowTime_{5.0};
   private: double redTime_{10.0};
   private: std::string prefix_{"traffic_light"};
 };

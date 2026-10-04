@@ -1,20 +1,19 @@
-# 智慧社区仿真（第八届全球校园人工智能算法精英大赛·算法应用赛）
+# 智慧社区仿真（第八届全球校园人工智能算法精英大赛·算法应用赛·省赛）
 
-ROS 2 Jazzy + Gazebo Harmonic 仿真场景，包含巡检机器人与完整社区环境：
+ROS 2 Jazzy + Gazebo Harmonic 仿真场景，对齐省赛 4.2m×4.2m 场地规格与示意图布局：
 
-- 闭合街区路网（环形路 + 中央南北主路，2 组红绿灯十字路口，含车道虚线/停止线/斑马线）
-- 2 组红绿灯（上方路口竖向、下方路口横向，统一时序 红灯10s / 绿灯15s / 黄灯3s）
-- A街区（上方封闭行人区，5 人）+ B街区（下方封闭行人区，5 人，左上角含指示牌）——共 10 个人偶立牌（社区人员/外来人员，供计数与框选）
-- 楼宇 A/B/C 纵向并排（楼宇 A 含火焰/高温可视化标记，供火情识别）、楼宇 D、站房
-- 站房（压力表 + 温度表 2 个仪表，供读数识别）
-- 右侧停车场（P 标识 + 1/2/3 号 3 个车位，各停 1 辆蓝牌轿车，车牌号不同，供 OCR）
-- 楼宇 C 下方路边横向停放 4 台小车（粉/青/灰/黄，供停车状态判断）
-- 两轮电动车（A街区违停 2 辆 + 停车区正常 8 辆 + 倒伏 2 辆）
-- 垃圾分类投放点（4 桶 2 开 2 闭，含正确/错误投放样本）
-- 指示牌（禁止直行、限速 15、禁止停车）
-- 起点/终点（右上角，同一位置合并）
+- **场地**：4.2m×4.2m 方形地板，四周围墙（厚 0.5cm、高 50cm）
+- **环形闭合车道**：带边线与道路中心虚线，道路侧边留白 60cm，路宽 40cm；
+  车道上橙黄色箭头标记行驶方向（顺时针：顶→东、右→南、底→西、左→北）
+- **2 组红绿灯**（顶部直道 / 底部直道，整体 48×64×5cm，箱体 59×14×5cm 带双腿），
+  各带停止线；下方红绿灯北侧有斑马线人行横道。时序：红灯 10s / 绿灯 15s / 黄灯 5s
+- **18 个人偶立牌**（高 15cm × 宽 5cm × 厚 0.5cm）：
+  A 街区（左上）6 人 + B 街区（左下）6 人 + 人行道 6 人，其中 2 人为非社区人员（F1/F2）
+- **右侧停车场**：3/2/1 号 3 个停车位（各宽 60cm，从上到下），每车位停 1 个车背景立牌
+  （34.5×25cm）+ 车牌（9.5×3cm）；另设 1 台车辆背景模型
+- **起点/终点合并**：场地右上角
 
-> 复赛任务一（巡检场景设计与演示）交付物：ROS 工作空间源代码，根目录含本 README 说明编译运行步骤。
+> 交付物：ROS 工作空间源代码，根目录含本 README 说明编译运行步骤。
 
 ## 环境要求
 
@@ -43,7 +42,7 @@ source install/setup.bash
 ros2 launch smart_community_sim smart_community.launch.py
 ```
 
-启动后出现 Gazebo GUI（社区场景 + 机器人），可用键盘遥控：
+启动后出现 Gazebo GUI（省赛场地 + 机器人），可用键盘遥控：
 
 ```bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
@@ -61,11 +60,12 @@ ros2 topic echo /camera/image_raw   # 或 rqt_image_view / rviz2 查看
 
 ```
 src/smart_community_sim/
-├── worlds/smart_community.sdf        # 社区世界（由 scripts/generate_world.py 生成）
+├── worlds/smart_community.sdf        # 省赛世界（由 scripts/generate_world.py 生成）
 ├── robot/robot.xacro                 # 巡检机器人（差分底盘 + 360° 雷达 + 单目相机）
 ├── launch/smart_community.launch.py  # 一键启动（世界 + 机器人 + 桥接 + 插件路径）
 ├── config/bridge.yaml                # ros_gz_bridge 桥接配置（含 frame_id 覆盖）
-├── textures/                         # 车牌/仪表/指示牌/标签等 PNG 纹理
+├── materials/                        # 原始模型图（人偶 / 车牌 / 车背景 / 红绿灯）
+├── textures/                         # 由 materials 生成的 PNG 纹理（立牌贴图等）
 ├── scripts/
 │   ├── generate_textures.py          # 生成 textures/（离线、可复现）
 │   └── generate_world.py             # 生成 worlds/smart_community.sdf
@@ -88,10 +88,10 @@ python3 scripts/generate_world.py      # 重新生成世界 SDF
 | 灯色 | 时长 |
 |---|---|
 | 绿灯 | 15 s |
-| 黄灯 | 3 s |
+| 黄灯 | 5 s |
 | 红灯 | 10 s |
 
-循环：绿(15s) → 黄(3s) → 红(10s) → 重复。**2 组红绿灯同一时序、同步切换**。
+循环：绿(15s) → 黄(5s) → 红(10s) → 重复。**2 组红绿灯同一时序、同步切换**。
 时长可在 `worlds/smart_community.sdf` 的 `<green_time>` / `<yellow_time>` /
 `<red_time>` 中调整。插件按模型名前缀 `traffic_light` 自动发现灯泡
 （每个模型内 `red` / `yellow` / `green` 三个 `<visual>`，与灯泡排列方向无关）。
@@ -120,6 +120,4 @@ TF 树：`odom` → `base_footprint`（OdometryPublisher 插件）→
 - **红绿灯插件加载失败**：确认已 `colcon build`，插件装在
   `install/smart_community_sim/lib/`；启动脚本会自动设置
   `GZ_SIM_SYSTEM_PLUGIN_PATH`。
-- **`/scan` 频率偏低（约 4Hz）**：社区场景几何较多，ogre2 渲染是瓶颈，
-  属正常现象；如需提速可降低 lidar 采样数或场景复杂度。
 - **无 GPU / WSL 无法开 GUI**：Gazebo GUI 需要 WSLg（`DISPLAY` 已配）。

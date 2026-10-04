@@ -616,7 +616,7 @@
       <static>true</static>
       <pose>-1.08 0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_01.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_04.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_a2">
@@ -637,14 +637,14 @@
       <static>true</static>
       <pose>-0.6900000000000001 0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_04.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_12.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_a5">
       <static>true</static>
       <pose>-0.56 0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_05.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_11.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="arrow_a">
@@ -694,35 +694,35 @@
       <static>true</static>
       <pose>-1.08 -0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_06.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_07.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_b2">
       <static>true</static>
       <pose>-0.9500000000000001 -0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_07.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_09.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_b3">
       <static>true</static>
       <pose>-0.8200000000000001 -0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_08.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_01.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_b4">
       <static>true</static>
       <pose>-0.6900000000000001 -0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_09.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_08.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_b5">
       <static>true</static>
       <pose>-0.56 -0.625 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_10.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_15.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="arrow_b_up">
@@ -744,35 +744,35 @@
       <static>true</static>
       <pose>-0.6 1.7 0.075 0 0 3.141592653589793</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_11.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_05.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_s2">
       <static>true</static>
       <pose>-1.0 1.7 0.075 0 0 3.141592653589793</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_12.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_06.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_s3">
       <static>true</static>
       <pose>-1.7 0.9 0.075 0 0 1.5707963267948966</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_13.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_10.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_s4">
       <static>true</static>
       <pose>-1.7 -0.2 0.075 0 0 1.5707963267948966</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_14.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_13.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_s5">
       <static>true</static>
       <pose>-0.6 -1.7 0.075 0 0 0.0</pose>
       <link name="link">
-<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_15.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
+<collision name='collision'><geometry><box><size>0.05 0.005 0.15</size></box></geometry></collision><visual name='visual'><geometry><box><size>0.05 0.005 0.15</size></box></geometry><material><pbr><metal><albedo_map>model://smart_community_sim/textures/person_community_14.png</albedo_map><metalness>0.0</metalness><roughness>1.0</roughness></metal></pbr></material></visual>
       </link>
     </model>
     <model name="person_s6">

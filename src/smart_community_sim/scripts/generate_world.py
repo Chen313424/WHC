@@ -448,9 +448,10 @@ def gen():
     a_x0, a_x1, a_y0, a_y1 = -1.2, -0.5, 0.2, 1.05
     parts.append(zone_rect("zone_a", a_x0, a_x1, a_y0, a_y1))
     parts.append(label("label_a", a_x0 + 0.25, a_y1 - 0.08, 0.06))
-    a_people = ["person_community_01.png", "person_community_02.png",
-                "person_community_03.png", "person_community_04.png",
-                "person_community_05.png"]
+    # A区 5 人颜色对齐原图：青(04)/红(02)/黑(03)/浅黄(12)/绿(11)
+    a_people = ["person_community_04.png", "person_community_02.png",
+                "person_community_03.png", "person_community_12.png",
+                "person_community_11.png"]
     for i, tex in enumerate(a_people):
         parts.append(standee(f"person_a{i + 1}", a_x0 + 0.12 + i * 0.13,
                              (a_y0 + a_y1) / 2, 0, f"{T}/{tex}"))
@@ -463,9 +464,10 @@ def gen():
     b_x0, b_x1, b_y0, b_y1 = -1.2, -0.5, -1.05, -0.2
     parts.append(zone_rect("zone_b", b_x0, b_x1, b_y0, b_y1))
     parts.append(label("label_b", b_x0 + 0.25, b_y1 - 0.08, 0.06))
-    b_people = ["person_community_06.png", "person_community_07.png",
-                "person_community_08.png", "person_community_09.png",
-                "person_community_10.png"]
+    # B区 5 人颜色对齐原图：红(07)/紫(09)/蓝(01)/黑(08)/浅黄(15，原图偏橙)
+    b_people = ["person_community_07.png", "person_community_09.png",
+                "person_community_01.png", "person_community_08.png",
+                "person_community_15.png"]
     for i, tex in enumerate(b_people):
         parts.append(standee(f"person_b{i + 1}", b_x0 + 0.12 + i * 0.13,
                              (b_y0 + b_y1) / 2, 0, f"{T}/{tex}"))
@@ -478,11 +480,11 @@ def gen():
     # ----- 其余 8 人（6 社区 + 2 非社区），沿道路/场地分布 -----
     parts.append("    <!-- ===== 其余人员（6 社区 + 2 非社区） ===== -->\n")
     others = [
-        ("person_s1", -0.6, 1.7, 180, "person_community_11.png"),
-        ("person_s2", -1.0, 1.7, 180, "person_community_12.png"),
-        ("person_s3", -1.7, 0.9, 90, "person_community_13.png"),
-        ("person_s4", -1.7, -0.2, 90, "person_community_14.png"),
-        ("person_s5", -0.6, -1.7, 0, "person_community_15.png"),
+        ("person_s1", -0.6, 1.7, 180, "person_community_05.png"),
+        ("person_s2", -1.0, 1.7, 180, "person_community_06.png"),
+        ("person_s3", -1.7, 0.9, 90, "person_community_10.png"),
+        ("person_s4", -1.7, -0.2, 90, "person_community_13.png"),
+        ("person_s5", -0.6, -1.7, 0, "person_community_14.png"),
         ("person_s6", -1.0, -1.7, 0, "person_community_16.png"),
         ("person_f1", 0.9, 1.7, 180, "person_noncommunity_01.png"),
         ("person_f2", 1.0, -1.7, 0, "person_noncommunity_02.png"),

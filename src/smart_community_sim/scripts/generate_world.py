@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""生成 worlds/smart_community.sdf（省赛 4.2m×4.2m 场地）。
+"""生成 worlds/smart_community.sdf（复赛 4.2m×4.2m 场地，严格复现任务示意图）。
 
-场景对齐「9.24 智慧社区培训」省赛规格与用户提供的示意图文字布局：
-  - 4.2m×4.2m 方形场地，四周围墙（厚 0.5cm、高 50cm）
-  - 环形闭合车道（边线 + 中心线），道路侧边留白 60cm，路宽 40cm
-  - 车道上橙黄色行驶方向箭头（顺时针：顶→东、右→南、底→西、左→北）
-  - 2 组红绿灯（顶部直道 / 底部直道，各带停止线），下方灯北侧斑马线
-  - 18 个人偶立牌（高15 宽5 厚0.5cm）：A街区 6 + B街区 6 + 人行道 6（含 2 非社区）
-  - 右侧 3 个停车位（3/2/1 号，各停 1 车背景立牌 + 车牌）+ 额外 1 车背景
-  - 起点/终点合并（右上角）
+回字形闭合单向环线（起点/终点合并于右上角）：
+  起点(右上) → 最上方水平道路(←) → 左侧竖直道路(↓) → 中部水平道路(→)
+  → 中央竖直道路(↓) → 最下方水平道路(→) → 最右侧竖直道路(↑) → 回到右上终点。
+
+布局要点（对齐参考图）：
+  - 6 段道路形成闭环，蓝色大箭头标注主行驶方向
+  - 2 组红绿灯：上方为竖向(红上/黄中/绿下)，下方为横向(绿左/黄中/红右)
+  - A临区(左上) 5 人、B临区(左下) 5 人，均为社区人员
+  - 右侧停车场：3/2/1 号停车位从上到下，各停 1 辆蓝绿色汽车
+  - 起点/终点标注、三处 60cm 尺寸标注、橙黄色局部朝向箭头
 
 纯 SDF 基本体 + 本地 PNG 纹理，不依赖外部 mesh / Fuel 下载，离线可复现。
 运行：python3 scripts/generate_world.py
@@ -21,10 +23,35 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.normpath(os.path.join(HERE, ".."))
 OUT = os.path.join(PKG, "worlds", "smart_community.sdf")
 
-# 纹理相对 world 文件的路径（world 在 worlds/ 下，纹理在 textures/ 下）
-T = "../textures"
+# 纹理用 model:// URI 引用，避免相对路径随 Gazebo 进程 cwd 解析失败（渲染成黑）。
+# launch 会设置 GZ_SIM_RESOURCE_PATH 指向包的 share 目录，使
+# model://smart_community_sim/textures/x.png 解析到 <share>/smart_community_sim/textures/x.png。
+T = "model://smart_community_sim/textures"
 
 PI = math.pi
+
+
+# ---------------------------------------------------------------------------
+# 场地 / 道路几何（单位 m，原点场地中心，+x 东、+y 北）
+# ---------------------------------------------------------------------------
+HALF = 2.1          # 场地半边长
+WALL_T = 0.005      # 墙厚 0.5cm
+WALL_H = 0.5        # 墙高 50cm
+ROAD_W = 0.4        # 路宽 40cm
+
+# 六段道路中心线（回字闭环）
+LEFT_X = -1.4       # 左侧竖直道路（↓）
+CENTRAL_X = -0.2    # 中央竖直道路（↓）
+RIGHT_X = 0.6       # 最右侧竖直道路（↑）
+TOP_Y = 1.3         # 最上方水平道路（←）
+MID_Y = 0.0         # 中部水平道路（→）
+BOT_Y = -1.3        # 最下方水平道路（→）
+
+ASPHALT = (0.30, 0.30, 0.32)
+WHITE = (0.92, 0.92, 0.92)
+YELLOW = (0.9, 0.75, 0.1)
+BLUE = (0.16, 0.38, 0.82)          # 蓝色主行驶方向箭头
+ORANGE = (0.93, 0.60, 0.06)        # 橙黄色局部朝向箭头
 
 
 # ---------------------------------------------------------------------------
@@ -90,98 +117,23 @@ def model(name, x, y, z, yaw_deg, body, static=True):
 
 
 def flat_patch(name, x, y, sx, sy, color, z=0.021):
-    """地面色块（车道线 / 停止线 / 斑马线 / 出发区 / 停车位框，无碰撞）。"""
+    """地面色块（车道线 / 停止线 / 斑马线 / 区域边框，无碰撞）。"""
     return model(name, x, y, z, 0,
                  visual("visual", box(sx, sy, 0.01),
                         mat_amb_diff(tuple(c * 0.9 for c in color), color)))
 
 
-# ---------------------------------------------------------------------------
-# 复合模型（省赛尺寸）
-# ---------------------------------------------------------------------------
-def standee(name, x, y, yaw_deg, tex):
-    """人偶立牌：高 15cm × 宽 5cm × 厚 0.5cm（底面贴地，贴人物纹理）。"""
-    b = box(0.05, 0.005, 0.15)
-    return model(name, x, y, 0.075, yaw_deg,
-                 collision("collision", b) +
-                 visual("visual", b, mat_tex(tex)))
-
-
-def plate(name, x, y, yaw_deg, tex):
-    """车牌立牌：高 3cm × 宽 9.5cm × 厚 0.1cm。"""
-    b = box(0.095, 0.001, 0.03)
-    return model(name, x, y, 0.015, yaw_deg,
-                 collision("collision", b) +
-                 visual("visual", b, mat_tex(tex)))
-
-
-def car_board(name, x, y, yaw_deg, plate_tex=None):
-    """车背景立牌：高 25cm × 宽 34.5cm × 厚 0.5cm（竖立，贴车背景纹理）。
-
-    plate_tex 非空时，在车背景正面（+y 方向）低处加一块车牌（9.5×3cm）。
-    朝向由 yaw 决定；纹理贴在 ±y 两个面，便于从道路两侧看到。
-    """
-    main = box(0.345, 0.005, 0.25)
-    body = collision("collision", main) + visual("visual", main,
-                                                 mat_tex(f"{T}/car_background.png"))
-    if plate_tex:
-        # 车牌放在车背景正面，前保险杠位置（横向偏左、贴地）
-        pb = box(0.095, 0.002, 0.03)
-        body += visual("plate", pb, mat_tex(plate_tex), "-0.08 0.0035 -0.09 0 0 0")
-    return model(name, x, y, 0.125, yaw_deg, body)
-
-
-def traffic_light(name, x, y, yaw_deg):
-    """省赛红绿灯：整体高 48cm、宽 64cm、厚 5cm。
-
-    箱体 59×14×5cm 挂在两根 48×2.5×2.5cm 腿上，箱体正面（+y）并排
-    红 / 黄 / 绿 三盏灯泡（visual 名固定 red/yellow/green，供插件识别）。
-    yaw 决定正面朝向；默认 yaw=0 时正面朝北（+y）。
-    """
-    grey = mat_amb_diff((0.10, 0.10, 0.10), (0.18, 0.18, 0.18))
-    legs = (visual("leg_l", box(0.025, 0.025, 0.48), grey, "-0.3075 0 0.24 0 0 0") +
-            visual("leg_r", box(0.025, 0.025, 0.48), grey, "0.3075 0 0.24 0 0 0"))
-    housing = visual("housing", box(0.59, 0.05, 0.14), grey, "0 0 0.41 0 0 0")
-    # 三盏灯：红左、黄中、绿右（横向并排），初始熄灭（插件控制）
-    red = visual("red", sph(0.045), mat_emissive(0.05, 0.05, 0.05), "-0.19 0.026 0.41 0 0 0")
-    yellow = visual("yellow", sph(0.045), mat_emissive(0.05, 0.05, 0.05), "0 0.026 0.41 0 0 0")
-    green = visual("green", sph(0.045), mat_emissive(0.05, 0.05, 0.05), "0.19 0.026 0.41 0 0 0")
-    return model(name, x, y, 0, yaw_deg,
-                 legs + housing + red + yellow + green)
-
-
-def arrow(name, x, y, yaw_deg, length=0.45, width=0.09):
-    """橙黄色行驶方向箭头（地面标线）：杆 + 前端箭头，指向 +x（经 yaw 旋转）。"""
-    color = (0.93, 0.60, 0.06)
-    m = mat_amb_diff(tuple(c * 0.85 for c in color), color)
-    L, W = length, width
-    Lh = L * 0.5
-    off = Lh * 0.3535  # 前端箭头两根斜杆中心的偏移量
-    shaft = visual("shaft", box(L, W, 0.012), m)
-    h1 = visual("head1", box(Lh, W, 0.012), m, f"{L/2 - off} {-off} 0 0 0 45")
-    h2 = visual("head2", box(Lh, W, 0.012), m, f"{L/2 - off} {off} 0 0 0 -45")
-    return model(name, x, y, 0.024, yaw_deg, shaft + h1 + h2)
-
-
-def parking_spot(name, x, y, lx, ly):
-    """停车位白线框（4 条白边）。lx 沿 X，ly 沿 Y。"""
-    w = 0.03
-    white = (0.95, 0.95, 0.95)
-    return (flat_patch(f"{name}_top", x, y + ly / 2, lx, w, white) +
-            flat_patch(f"{name}_bot", x, y - ly / 2, lx, w, white) +
-            flat_patch(f"{name}_left", x - lx / 2, y, w, ly, white) +
-            flat_patch(f"{name}_right", x + lx / 2, y, w, ly, white))
+def flat_tex(name, x, y, sx, sy, tex, z=0.022, yaw_deg=0):
+    """地面贴图色块（文字标注等，无碰撞）。"""
+    return model(name, x, y, z, yaw_deg,
+                 visual("visual", box(sx, sy, 0.01), mat_tex(tex)))
 
 
 # ---------------------------------------------------------------------------
 # 车道线 helpers
 # ---------------------------------------------------------------------------
-WHITE = (0.92, 0.92, 0.92)
-YELLOW = (0.9, 0.75, 0.1)
-
-
 def solid_line(axis, fixed, lo, hi, prefix, color, w=0.02):
-    """沿一条轴画连续实线（axis='x' 时沿 X 且 fixed=y，axis='y' 时沿 Y 且 fixed=x）。"""
+    """沿一条轴画连续实线（axis='x' 沿 X 且 fixed=y；axis='y' 沿 Y 且 fixed=x）。"""
     length = hi - lo
     if axis == "x":
         return flat_patch(prefix, (lo + hi) / 2, fixed, length, w, color)
@@ -205,7 +157,7 @@ def dash_line(axis, fixed, lo, hi, prefix, color=YELLOW, dash=0.15, gap=0.15, w=
 
 
 def zebra(name, x, y, across_x, stripes, stripe_w=0.07):
-    """斑马线：across_x=True 时横跨 X 方向（条纹沿 Y 排列）的横条。"""
+    """斑马线：across_x=True 横跨 X 方向（横条，条纹沿 Y 排列）。"""
     parts = []
     for i in range(stripes):
         off = (i - (stripes - 1) / 2) * (stripe_w * 1.7)
@@ -217,23 +169,157 @@ def zebra(name, x, y, across_x, stripes, stripe_w=0.07):
 
 
 # ---------------------------------------------------------------------------
+# 道路段（路面 + 两侧白实线 + 中心黄虚线）
+# ---------------------------------------------------------------------------
+def road_seg_h(name, y, x0, x1):
+    """水平道路：y 固定，x 从 x0 到 x1。"""
+    cx, length = (x0 + x1) / 2, x1 - x0
+    parts = model(name, cx, y, 0.01, 0,
+                  collision("c", box(length, ROAD_W, 0.02)) +
+                  visual("v", box(length, ROAD_W, 0.02), mat_amb_diff(ASPHALT, ASPHALT)))
+    parts += solid_line("x", y + ROAD_W / 2, x0, x1, f"{name}_edge_n", WHITE)
+    parts += solid_line("x", y - ROAD_W / 2, x0, x1, f"{name}_edge_s", WHITE)
+    parts += dash_line("x", y, x0, x1, f"{name}_dash")
+    return parts
+
+
+def road_seg_v(name, x, y0, y1):
+    """竖直道路：x 固定，y 从 y0 到 y1。"""
+    cy, length = (y0 + y1) / 2, y1 - y0
+    parts = model(name, x, cy, 0.01, 0,
+                  collision("c", box(ROAD_W, length, 0.02)) +
+                  visual("v", box(ROAD_W, length, 0.02), mat_amb_diff(ASPHALT, ASPHALT)))
+    parts += solid_line("y", x + ROAD_W / 2, y0, y1, f"{name}_edge_e", WHITE)
+    parts += solid_line("y", x - ROAD_W / 2, y0, y1, f"{name}_edge_w", WHITE)
+    parts += dash_line("y", x, y0, y1, f"{name}_dash")
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# 复合模型
+# ---------------------------------------------------------------------------
+def standee(name, x, y, yaw_deg, tex):
+    """人偶立牌：高 15cm × 宽 5cm × 厚 0.5cm（贴人物纹理）。"""
+    b = box(0.05, 0.005, 0.15)
+    return model(name, x, y, 0.075, yaw_deg,
+                 collision("collision", b) +
+                 visual("visual", b, mat_tex(tex)))
+
+
+def plate(name, x, y, yaw_deg, tex):
+    """车牌立牌：高 3cm × 宽 9.5cm × 厚 0.1cm。"""
+    b = box(0.095, 0.001, 0.03)
+    return model(name, x, y, 0.015, yaw_deg,
+                 collision("collision", b) +
+                 visual("visual", b, mat_tex(tex)))
+
+
+def car_board(name, x, y, yaw_deg, plate_tex=None):
+    """车背景立牌：高 25cm × 宽 34.5cm × 厚 0.5cm（竖立，贴蓝绿色车背景纹理）。
+
+    plate_tex 非空时，在车背景正面低处加一块车牌（9.5×3cm）。
+    """
+    main = box(0.345, 0.005, 0.25)
+    body = collision("collision", main) + visual("visual", main,
+                                                 mat_tex(f"{T}/car_background.png"))
+    if plate_tex:
+        pb = box(0.095, 0.002, 0.03)
+        body += visual("plate", pb, mat_tex(plate_tex), "-0.08 0.0035 -0.09 0 0 0")
+    return model(name, x, y, 0.125, yaw_deg, body)
+
+
+def traffic_light(name, x, y, yaw_deg, orientation="horizontal",
+                  order=("red", "yellow", "green")):
+    """省赛红绿灯。
+
+    orientation='horizontal'：三灯横向并排（箱体 59×14×5cm 挂双腿）。
+    orientation='vertical'  ：三灯竖向排列（箱体 14×59×5cm）。
+    order 依次为 (左/上, 中, 右/下) 三盏灯，灯名固定 red/yellow/green 供插件识别。
+    默认 yaw=0 时正面朝北（+y）。
+    """
+    grey = mat_amb_diff((0.10, 0.10, 0.10), (0.18, 0.18, 0.18))
+    lamp_mat = mat_emissive(0.05, 0.05, 0.05)  # 初始熄灭，插件控制
+    if orientation == "horizontal":
+        legs = (visual("leg_l", box(0.025, 0.025, 0.48), grey, "-0.3075 0 0.24 0 0 0") +
+                visual("leg_r", box(0.025, 0.025, 0.48), grey, "0.3075 0 0.24 0 0 0"))
+        housing = visual("housing", box(0.59, 0.05, 0.14), grey, "0 0 0.41 0 0 0")
+        xs = [-0.19, 0.0, 0.19]
+        lamps = "".join(visual(c, sph(0.045), lamp_mat, f"{lx} 0.026 0.41 0 0 0")
+                        for c, lx in zip(order, xs))
+    else:  # vertical
+        legs = (visual("leg_l", box(0.025, 0.025, 0.30), grey, "-0.05 0 0.15 0 0 0") +
+                visual("leg_r", box(0.025, 0.025, 0.30), grey, "0.05 0 0.15 0 0 0"))
+        housing = visual("housing", box(0.14, 0.05, 0.59), grey, "0 0 0.42 0 0 0")
+        zs = [0.19, 0.0, -0.19]
+        lamps = "".join(visual(c, sph(0.045), lamp_mat, f"0 0.026 {0.42 + lz} 0 0 0")
+                        for c, lz in zip(order, zs))
+    return model(name, x, y, 0, yaw_deg, legs + housing + lamps)
+
+
+def arrow(name, x, y, yaw_deg, length=0.45, width=0.09, color=BLUE):
+    """行驶方向箭头（地面标线）：杆 + 前端箭头，指向 +x（经 yaw 旋转）。
+
+    默认蓝色（主行驶方向）；color=ORANGE 时用于局部朝向箭头。
+    """
+    m = mat_amb_diff(tuple(c * 0.85 for c in color), color)
+    L, W = length, width
+    Lh = L * 0.5
+    off = Lh * 0.3535  # 前端箭头两根斜杆中心的偏移量
+    shaft = visual("shaft", box(L, W, 0.012), m)
+    h1 = visual("head1", box(Lh, W, 0.012), m, f"{L/2 - off} {-off} 0 0 0 45")
+    h2 = visual("head2", box(Lh, W, 0.012), m, f"{L/2 - off} {off} 0 0 0 -45")
+    return model(name, x, y, 0.024, yaw_deg, shaft + h1 + h2)
+
+
+def zone_rect(name, x0, x1, y0, y1):
+    """矩形封闭区域边框（A/B临区），深灰色细线。"""
+    border = (0.25, 0.25, 0.28)
+    w = 0.02
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    lx, ly = x1 - x0, y1 - y0
+    return (flat_patch(f"{name}_n", cx, y1, lx, w, border) +
+            flat_patch(f"{name}_s", cx, y0, lx, w, border) +
+            flat_patch(f"{name}_w", x0, cy, w, ly, border) +
+            flat_patch(f"{name}_e", x1, cy, w, ly, border))
+
+
+def label(name, x, y, height, yaw_deg=0, z=0.023, tex_name=None):
+    """地面文字标注。height 为标注高度(m)，宽度按 PNG 宽高比自动计算。
+
+    tex_name 默认等于 name；当多个位置复用同一张纹理时，用唯一 name +
+    相同 tex_name，避免模型重名。
+    """
+    tex_name = tex_name or name
+    width = height * 4
+    try:
+        from PIL import Image
+        p = os.path.join(PKG, "textures", f"{tex_name}.png")
+        if os.path.exists(p):
+            with Image.open(p) as im:
+                w, h = im.size
+            width = height * w / h
+    except Exception:
+        pass
+    return flat_tex(name, x, y, width, height, f"{T}/{tex_name}.png", z=z, yaw_deg=yaw_deg)
+
+
+def parking_spot(name, x, y, lx, ly):
+    """停车位白线框（4 条白边）。lx 沿 X，ly 沿 Y。"""
+    w = 0.03
+    white = (0.95, 0.95, 0.95)
+    return (flat_patch(f"{name}_top", x, y + ly / 2, lx, w, white) +
+            flat_patch(f"{name}_bot", x, y - ly / 2, lx, w, white) +
+            flat_patch(f"{name}_left", x - lx / 2, y, w, ly, white) +
+            flat_patch(f"{name}_right", x + lx / 2, y, w, ly, white))
+
+
+# ---------------------------------------------------------------------------
 # 组装世界
 # ---------------------------------------------------------------------------
-# 场地 4.2m×4.2m，坐标原点在中心，+x 东（右）、+y 北（上）。
-HALF = 2.1          # 半边长
-WALL_T = 0.005      # 墙厚 0.5cm
-WALL_H = 0.5        # 墙高 50cm
-MARGIN = 0.6        # 道路侧边留白 60cm
-ROAD_W = 0.4        # 路宽 40cm
-ROAD_O = HALF - MARGIN        # 道路外缘 1.5m
-ROAD_I = ROAD_O - ROAD_W      # 道路内缘 1.1m
-ROAD_C = (ROAD_O + ROAD_I) / 2  # 道路中心线 1.3m
-
-
 def gen():
     parts = []
     parts.append(f"""<?xml version="1.0" ?>
-<!-- 智慧社区省赛仿真世界（4.2m×4.2m，由 scripts/generate_world.py 生成，勿手改，改脚本后重跑） -->
+<!-- 智慧社区复赛仿真世界（4.2m×4.2m，由 scripts/generate_world.py 生成，勿手改，改脚本后重跑） -->
 <sdf version="1.8">
   <world name="smart_community">
 
@@ -314,104 +400,116 @@ def gen():
                        collision("c", box(WALL_T, 4.2 + WALL_T, WALL_H)) +
                        visual("v", box(WALL_T, 4.2 + WALL_T, WALL_H), gray_wall)))
 
-    # ----- 道路（环形闭合，4 段） -----
-    parts.append("    <!-- ===== 环形道路 ===== -->\n")
-    asphalt = (0.30, 0.30, 0.32)
-    parts.append(model("road_top", 0, ROAD_C, 0.01, 0,
-                       collision("c", box(ROAD_O * 2, ROAD_W, 0.02)) +
-                       visual("v", box(ROAD_O * 2, ROAD_W, 0.02), mat_amb_diff(asphalt, asphalt))))
-    parts.append(model("road_bottom", 0, -ROAD_C, 0.01, 0,
-                       collision("c", box(ROAD_O * 2, ROAD_W, 0.02)) +
-                       visual("v", box(ROAD_O * 2, ROAD_W, 0.02), mat_amb_diff(asphalt, asphalt))))
-    parts.append(model("road_left", -ROAD_C, 0, 0.01, 0,
-                       collision("c", box(ROAD_W, ROAD_I * 2, 0.02)) +
-                       visual("v", box(ROAD_W, ROAD_I * 2, 0.02), mat_amb_diff(asphalt, asphalt))))
-    parts.append(model("road_right", ROAD_C, 0, 0.01, 0,
-                       collision("c", box(ROAD_W, ROAD_I * 2, 0.02)) +
-                       visual("v", box(ROAD_W, ROAD_I * 2, 0.02), mat_amb_diff(asphalt, asphalt))))
+    # ----- 回字形道路（6 段，单向闭环） -----
+    parts.append("    <!-- ===== 回字形道路（6 段闭环） ===== -->\n")
+    # 1. 最上方水平道路（←）：x 从 LEFT 到 RIGHT
+    parts.append(road_seg_h("road_top", TOP_Y, LEFT_X, RIGHT_X))
+    # 2. 左侧竖直道路（↓）：y 从 TOP 到 MID
+    parts.append(road_seg_v("road_left", LEFT_X, MID_Y, TOP_Y))
+    # 3. 中部水平道路（→）：x 从 LEFT 到 CENTRAL
+    parts.append(road_seg_h("road_mid", MID_Y, LEFT_X, CENTRAL_X))
+    # 4. 中央竖直道路（↓）：y 从 MID 到 BOT
+    parts.append(road_seg_v("road_central", CENTRAL_X, BOT_Y, MID_Y))
+    # 5. 最下方水平道路（→）：x 从 CENTRAL 到 RIGHT
+    parts.append(road_seg_h("road_bottom", BOT_Y, CENTRAL_X, RIGHT_X))
+    # 6. 最右侧竖直道路（↑）：y 从 BOT 到 TOP
+    parts.append(road_seg_v("road_right", RIGHT_X, BOT_Y, TOP_Y))
 
-    # ----- 车道边线（外侧 + 内侧，白色实线） -----
-    parts.append("    <!-- ===== 车道边线 ===== -->\n")
-    parts.append(solid_line("x", ROAD_O, -ROAD_O, ROAD_O, "edge_out_top", WHITE))
-    parts.append(solid_line("x", -ROAD_O, -ROAD_O, ROAD_O, "edge_out_bot", WHITE))
-    parts.append(solid_line("y", ROAD_O, -ROAD_O, ROAD_O, "edge_out_right", WHITE))
-    parts.append(solid_line("y", -ROAD_O, -ROAD_O, ROAD_O, "edge_out_left", WHITE))
-    parts.append(solid_line("x", ROAD_I, -ROAD_I, ROAD_I, "edge_in_top", WHITE))
-    parts.append(solid_line("x", -ROAD_I, -ROAD_I, ROAD_I, "edge_in_bot", WHITE))
-    parts.append(solid_line("y", ROAD_I, -ROAD_I, ROAD_I, "edge_in_right", WHITE))
-    parts.append(solid_line("y", -ROAD_I, -ROAD_I, ROAD_I, "edge_in_left", WHITE))
+    # ----- 蓝色主行驶方向箭头（6 段，逐一对应） -----
+    parts.append("    <!-- ===== 蓝色主行驶方向箭头 ===== -->\n")
+    parts.append(arrow("arrow_top", RIGHT_X - 0.5, TOP_Y, 180))       # 上方 ←（西）
+    parts.append(arrow("arrow_left", LEFT_X, TOP_Y - 0.5, -90))        # 左侧 ↓（南）
+    parts.append(arrow("arrow_mid", CENTRAL_X - 0.5, MID_Y, 0))        # 中部 →（东）
+    parts.append(arrow("arrow_central", CENTRAL_X, MID_Y - 0.5, -90))  # 中央 ↓（南）
+    parts.append(arrow("arrow_bottom", RIGHT_X - 0.4, BOT_Y, 0))       # 下方 →（东）
+    parts.append(arrow("arrow_right", RIGHT_X, TOP_Y - 0.5, 90))       # 右侧 ↑（北）
 
-    # ----- 道路中心线（黄色虚线） -----
-    parts.append("    <!-- ===== 道路中心虚线 ===== -->\n")
-    parts.append(dash_line("x", ROAD_C, -ROAD_C, ROAD_C, "dash_top"))
-    parts.append(dash_line("x", -ROAD_C, -ROAD_C, ROAD_C, "dash_bot"))
-    parts.append(dash_line("y", ROAD_C, -ROAD_I, ROAD_I, "dash_right"))
-    parts.append(dash_line("y", -ROAD_C, -ROAD_I, ROAD_I, "dash_left"))
-
-    # ----- 行驶方向箭头（顺时针：顶→东、右→南、底→西、左→北） -----
-    parts.append("    <!-- ===== 行驶方向箭头（橙黄） ===== -->\n")
-    parts.append(arrow("arrow_top", -0.6, ROAD_C, 0, 0.45))       # 顶：→ 东
-    parts.append(arrow("arrow_right", ROAD_C, 0.6, -90, 0.45))    # 右：↓ 南
-    parts.append(arrow("arrow_bottom", 0.6, -ROAD_C, 180, 0.45))  # 底：← 西
-    parts.append(arrow("arrow_left", -ROAD_C, -0.6, 90, 0.45))    # 左：↑ 北
-
-    # ----- 红绿灯（2 组） + 停止线 + 斑马线 -----
+    # ----- 红绿灯 + 停止线 + 斑马线 -----
     parts.append("    <!-- ===== 红绿灯 + 停止线 + 斑马线 ===== -->\n")
-    # 上方灯：右侧直道（南向车流）旁，正面向北（对向来车）
-    parts.append(traffic_light("traffic_light_1", 1.75, 0.9, 0))
-    parts.append(solid_line("x", 0.9, ROAD_I, ROAD_O, "stop_top", WHITE, w=0.05))
-    # 下方灯：左侧直道（北向车流）旁，正面向南（对向来车）
-    parts.append(traffic_light("traffic_light_2", -1.75, -0.9, 180))
-    parts.append(solid_line("x", -0.9, -ROAD_O, -ROAD_I, "stop_bottom", WHITE, w=0.05))
-    # 斑马线：下方灯北侧，横跨左侧直道
-    parts.append(zebra("zebra_bottom", -ROAD_C, -0.72, across_x=False, stripes=5))
+    # 上方灯：竖向排列（红上/黄中/绿下），位于顶部道路北侧（对向来车）
+    parts.append(traffic_light("traffic_light_1", -0.6, TOP_Y + 0.25, 0,
+                               orientation="vertical", order=("red", "yellow", "green")))
+    # 顶部停止线：竖向短横线（跨道路），位于灯东侧（车自东向西，先停后过）
+    parts.append(solid_line("y", -0.3, TOP_Y - ROAD_W / 2, TOP_Y + ROAD_W / 2,
+                            "stop_top", WHITE, w=0.05))
+    # 顶部斑马线：横向，位于灯下方道路处
+    parts.append(zebra("zebra_top", -0.6, TOP_Y, across_x=True, stripes=5))
+    # 下方灯：横向排列（绿左/黄中/红右），位于中央道路与下方道路交汇处
+    parts.append(traffic_light("traffic_light_2", CENTRAL_X - 0.2, BOT_Y - 0.25, 180,
+                               orientation="horizontal", order=("green", "yellow", "red")))
+    # 下方停止线：横向，位于中央道路（车自北向南）
+    parts.append(solid_line("x", BOT_Y + 0.3, CENTRAL_X - ROAD_W / 2, CENTRAL_X + ROAD_W / 2,
+                            "stop_bottom", WHITE, w=0.05))
+    # 下方斑马线：横向，位于中央道路与下方道路交汇处
+    parts.append(zebra("zebra_bottom", CENTRAL_X, BOT_Y, across_x=True, stripes=5))
 
-    # ----- A街区（左上矩形区域，6 社区） -----
-    parts.append("    <!-- ===== A街区（左上，6 社区人员） ===== -->\n")
+    # ----- A临区（左上矩形，5 社区人员） -----
+    parts.append("    <!-- ===== A临区（左上，5 社区人员） ===== -->\n")
+    a_x0, a_x1, a_y0, a_y1 = -1.2, -0.5, 0.2, 1.05
+    parts.append(zone_rect("zone_a", a_x0, a_x1, a_y0, a_y1))
+    parts.append(label("label_a", a_x0 + 0.25, a_y1 - 0.08, 0.06))
     a_people = ["person_community_01.png", "person_community_02.png",
                 "person_community_03.png", "person_community_04.png",
-                "person_community_05.png", "person_community_06.png"]
-    a_pos = [(-0.80, 0.35, 0), (-0.45, 0.35, 0), (-0.10, 0.35, 0),
-             (-0.80, 0.85, 0), (-0.45, 0.85, 0), (-0.10, 0.85, 0)]
-    for i, (px, py, yw) in enumerate(a_pos):
-        parts.append(standee(f"person_a{i + 1}", px, py, yw, f"{T}/{a_people[i]}"))
+                "person_community_05.png"]
+    for i, tex in enumerate(a_people):
+        parts.append(standee(f"person_a{i + 1}", a_x0 + 0.12 + i * 0.13,
+                             (a_y0 + a_y1) / 2, 0, f"{T}/{tex}"))
+    # A区下方橙色小箭头（局部朝向）
+    parts.append(arrow("arrow_a", (a_x0 + a_x1) / 2 + 0.15, a_y0 - 0.05, 0,
+                       length=0.22, width=0.06, color=ORANGE))
 
-    # ----- B街区（左下矩形区域，6 社区） -----
-    parts.append("    <!-- ===== B街区（左下，6 社区人员） ===== -->\n")
-    b_people = ["person_community_07.png", "person_community_08.png",
-                "person_community_09.png", "person_community_10.png",
-                "person_community_11.png", "person_community_12.png"]
-    b_pos = [(-0.80, -0.35, 0), (-0.45, -0.35, 0), (-0.10, -0.35, 0),
-             (-0.80, -0.85, 0), (-0.45, -0.85, 0), (-0.10, -0.85, 0)]
-    for i, (px, py, yw) in enumerate(b_pos):
-        parts.append(standee(f"person_b{i + 1}", px, py, yw, f"{T}/{b_people[i]}"))
+    # ----- B临区（左下矩形，5 社区人员） -----
+    parts.append("    <!-- ===== B临区（左下，5 社区人员） ===== -->\n")
+    b_x0, b_x1, b_y0, b_y1 = -1.2, -0.5, -1.05, -0.2
+    parts.append(zone_rect("zone_b", b_x0, b_x1, b_y0, b_y1))
+    parts.append(label("label_b", b_x0 + 0.25, b_y1 - 0.08, 0.06))
+    b_people = ["person_community_06.png", "person_community_07.png",
+                "person_community_08.png", "person_community_09.png",
+                "person_community_10.png"]
+    for i, tex in enumerate(b_people):
+        parts.append(standee(f"person_b{i + 1}", b_x0 + 0.12 + i * 0.13,
+                             (b_y0 + b_y1) / 2, 0, f"{T}/{tex}"))
+    # B区橙色方向箭头：一个向上、一个向右
+    parts.append(arrow("arrow_b_up", b_x0 + 0.2, b_y0 + 0.15, 90,
+                       length=0.22, width=0.06, color=ORANGE))
+    parts.append(arrow("arrow_b_right", b_x0 + 0.2, b_y0 + 0.03, 0,
+                       length=0.22, width=0.06, color=ORANGE))
 
-    # ----- 人行道区域（6 人，含 2 非社区 F1/F2） -----
-    parts.append("    <!-- ===== 人行道区域（4 社区 + 2 非社区） ===== -->\n")
-    parts.append(standee("person_s1", -0.5, 1.8, 180, f"{T}/person_community_13.png"))
-    parts.append(standee("person_s2", -0.5, -1.8, 0, f"{T}/person_community_14.png"))
-    parts.append(standee("person_s3", 0.5, -1.8, 0, f"{T}/person_community_15.png"))
-    parts.append(standee("person_s4", -1.8, -0.5, 90, f"{T}/person_community_16.png"))
-    parts.append(standee("person_f1", 0.5, 1.8, 180, f"{T}/person_noncommunity_01.png"))
-    parts.append(standee("person_f2", -1.8, 0.5, 90, f"{T}/person_noncommunity_02.png"))
+    # ----- 其余 8 人（6 社区 + 2 非社区），沿道路/场地分布 -----
+    parts.append("    <!-- ===== 其余人员（6 社区 + 2 非社区） ===== -->\n")
+    others = [
+        ("person_s1", -0.6, 1.7, 180, "person_community_11.png"),
+        ("person_s2", -1.0, 1.7, 180, "person_community_12.png"),
+        ("person_s3", -1.7, 0.9, 90, "person_community_13.png"),
+        ("person_s4", -1.7, -0.2, 90, "person_community_14.png"),
+        ("person_s5", -0.6, -1.7, 0, "person_community_15.png"),
+        ("person_s6", -1.0, -1.7, 0, "person_community_16.png"),
+        ("person_f1", 0.9, 1.7, 180, "person_noncommunity_01.png"),
+        ("person_f2", 1.0, -1.7, 0, "person_noncommunity_02.png"),
+    ]
+    for name, px, py, yw, tex in others:
+        parts.append(standee(name, px, py, yw, f"{T}/{tex}"))
 
-    # ----- 右侧停车场（3 号 / 2 号 / 1 号，从上到下，各停 1 车背景 + 车牌） -----
-    parts.append("    <!-- ===== 右侧停车场（3 车位） ===== -->\n")
-    spots = [("3", 1.0, f"{T}/plate_3.png"),
-             ("2", 0.0, f"{T}/plate_2.png"),
-             ("1", -1.0, f"{T}/plate_1.png")]
-    for num, sy, plate_tex in spots:
-        parts.append(parking_spot(f"spot_{num}", 1.8, sy, 0.6, 0.6))
-        parts.append(car_board(f"car_{num}", 1.8, sy, 90, plate_tex))
+    # ----- 右侧停车场（3/2/1 号，从上到下，各停 1 蓝绿色汽车） -----
+    parts.append("    <!-- ===== 右侧停车场（3 车位，从上到下 3/2/1） ===== -->\n")
+    spots = [("3", 0.6, f"{T}/plate_3.png", "label_spot_3"),
+             ("2", 0.0, f"{T}/plate_2.png", "label_spot_2"),
+             ("1", -0.6, f"{T}/plate_1.png", "label_spot_1")]
+    for num, sy, plate_tex, lab in spots:
+        parts.append(parking_spot(f"spot_{num}", 1.7, sy, 0.6, 0.6))
+        parts.append(car_board(f"car_{num}", 1.7, sy, 90, plate_tex))
+        parts.append(label(lab, 2.05, sy, 0.045, yaw_deg=90))
 
-    # ----- 额外 1 台车辆背景模型（放在顶部直道北侧人行道） -----
-    parts.append("    <!-- ===== 额外车辆背景模型 ===== -->\n")
-    parts.append(car_board("car_background_extra", 0.0, 1.8, 0))
-
-    # ----- 起点/终点（右上角，合并） -----
+    # ----- 起点/终点（右上角，中文标注） -----
     parts.append("    <!-- ===== 起点/终点（右上角） ===== -->\n")
-    parts.append(flat_patch("start_pad", ROAD_C, ROAD_C, 0.5, 0.5, (0.4, 0.8, 0.4)))
-    parts.append(flat_patch("start_border", ROAD_C, ROAD_C, 0.52, 0.52, WHITE, z=0.018))
+    parts.append(label("label_start", 0.95, 1.75, 0.07))
+    parts.append(label("label_end", 0.95, 1.55, 0.07))
+
+    # ----- 三处 60cm 尺寸标注 -----
+    parts.append("    <!-- ===== 60cm 尺寸标注（三处） ===== -->\n")
+    parts.append(label("label_60cm_a", a_x1 + 0.16, 1.75, 0.05, tex_name="label_60cm"))       # A区右侧
+    parts.append(label("label_60cm_parking", 1.0, 0.35, 0.05, tex_name="label_60cm"))        # 道路与停车区之间
+    parts.append(label("label_60cm_b", (b_x0 + b_x1) / 2, -1.75, 0.05, tex_name="label_60cm"))  # B区下方
 
     parts.append("""
   </world>

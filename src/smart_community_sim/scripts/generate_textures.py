@@ -82,6 +82,21 @@ def random_license(rng):
             + "·" + "".join(rng.choice(_PLATE_CHARS) for _ in range(5)))
 
 
+def render_label(text, fg=(0, 0, 0), bg=(255, 255, 255), font_size=56, pad=6):
+    """把中文/数字标注渲染成一张白底黑字的小图（供地面/标牌贴图用）。
+
+    返回 (Image, 宽cm, 高cm)——宽高按 100 px/cm 折算，供世界按比例铺贴。
+    """
+    font = _plate_font(font_size)
+    probe = Image.new("RGBA", (8, 8))
+    d = ImageDraw.Draw(probe)
+    bbox = d.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    img = Image.new("RGB", (tw + pad * 2, th + pad * 2), bg)
+    ImageDraw.Draw(img).text((pad - bbox[0], pad - bbox[1]), text, font=font, fill=fg)
+    return img
+
+
 def board_canvas(w_cm, h_cm):
     return (int(w_cm * PX_PER_CM), int(h_cm * PX_PER_CM))
 
@@ -139,6 +154,22 @@ def main():
         # 车背景立牌 34.5cm × 25cm，等比拉伸到 3450×2500（100 px/cm）
         Image.open(car_bg).convert("RGB").resize(
             board_canvas(34.5, 25), Image.LANCZOS).save(os.path.join(OUT, "car_background.png"))
+
+    # 文字标注（地面/标牌贴图）：起点、终点、A/B临区、停车位编号、60cm 尺寸
+    labels = {
+        "label_start": "起点",
+        "label_end": "终点",
+        "label_a": "A临区",
+        "label_b": "B临区",
+        "label_60cm": "60cm",
+        "label_spot_3": "3号停车位",
+        "label_spot_2": "2号停车位",
+        "label_spot_1": "1号停车位",
+    }
+    for name, text in labels.items():
+        img = render_label(text)
+        img.save(os.path.join(OUT, f"{name}.png"))
+        print(f"  标注 {name}: {text} ({img.size[0]}x{img.size[1]}px)")
 
     print("生成完成 ->", OUT)
     for f in sorted(os.listdir(OUT)):

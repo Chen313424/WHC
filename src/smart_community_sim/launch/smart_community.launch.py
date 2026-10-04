@@ -25,6 +25,14 @@ def generate_launch_description():
     # 通过 GZ_SIM_SYSTEM_PLUGIN_PATH 让 gz-sim 能按文件名加载。
     plugin_lib = os.path.join(get_package_prefix('smart_community_sim'), 'lib')
 
+    # 世界 SDF 里纹理用 model://smart_community_sim/... 引用，这里把包的
+    # share 目录加入 GZ_SIM_RESOURCE_PATH，让 Gazebo 能解析到 textures/。
+    # share 目录 = pkg 的上一级（install/smart_community_sim/share）。
+    share_root = os.path.dirname(pkg)
+    resource_path = share_root
+    if os.environ.get('GZ_SIM_RESOURCE_PATH'):
+        resource_path = share_root + os.pathsep + os.environ['GZ_SIM_RESOURCE_PATH']
+
     world_file = os.path.join(pkg, 'worlds', 'smart_community.sdf')
     xacro_file = os.path.join(pkg, 'robot', 'robot.xacro')
 
@@ -80,6 +88,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         SetEnvironmentVariable('GZ_SIM_SYSTEM_PLUGIN_PATH', plugin_lib),
+        SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),
         gz_sim,
         robot_state_publisher,
         spawn,

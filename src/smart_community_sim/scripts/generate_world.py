@@ -494,12 +494,12 @@ def gen():
 
     # ----- 右侧停车场（3/2/1 号，从上到下，各停 1 蓝绿色汽车） -----
     parts.append("    <!-- ===== 右侧停车场（3 车位，从上到下 3/2/1） ===== -->\n")
-    spots = [("3", 0.6, f"{T}/plate_3.png", "label_spot_3"),
-             ("2", 0.0, f"{T}/plate_2.png", "label_spot_2"),
-             ("1", -0.6, f"{T}/plate_1.png", "label_spot_1")]
+    spots = [("3", -0.55, f"{T}/plate_3.png", "label_spot_3"),
+             ("2", -1.15, f"{T}/plate_2.png", "label_spot_2"),
+             ("1", -1.75, f"{T}/plate_1.png", "label_spot_1")]
     for num, sy, plate_tex, lab in spots:
-        parts.append(parking_spot(f"spot_{num}", 1.7, sy, 0.6, 0.6))
-        parts.append(car_board(f"car_{num}", 1.7, sy, 90, plate_tex))
+        parts.append(parking_spot(f"spot_{num}", 1.7, sy, 0.55, 0.35))
+        parts.append(car_board(f"car_{num}", 1.7, sy, 0, plate_tex))
         parts.append(label(lab, 2.05, sy, 0.045, yaw_deg=90))
 
     # ----- 起点/终点（右上角，中文标注） -----
@@ -510,7 +510,7 @@ def gen():
     # ----- 三处 60cm 尺寸标注 -----
     parts.append("    <!-- ===== 60cm 尺寸标注（三处） ===== -->\n")
     parts.append(label("label_60cm_a", a_x1 + 0.16, 1.75, 0.05, tex_name="label_60cm"))       # A区右侧
-    parts.append(label("label_60cm_parking", 1.0, 0.35, 0.05, tex_name="label_60cm"))        # 道路与停车区之间
+    parts.append(label("label_60cm_parking", 1.0, -0.55, 0.05, tex_name="label_60cm"))        # 道路与停车区之间
     parts.append(label("label_60cm_b", (b_x0 + b_x1) / 2, -1.75, 0.05, tex_name="label_60cm"))  # B区下方
 
     parts.append("""

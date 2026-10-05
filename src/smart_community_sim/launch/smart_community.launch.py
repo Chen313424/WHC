@@ -89,6 +89,9 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         SetEnvironmentVariable('GZ_SIM_SYSTEM_PLUGIN_PATH', plugin_lib),
         SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),
+        # WSLg 下强制用 d3d12 硬件渲染（AMD Radeon 610M iGPU），否则 Mesa 会
+        # 回退到 llvmpipe 软件渲染，导致纹理超出显存预算、立牌/车牌全部变黑。
+        SetEnvironmentVariable('GALLIUM_DRIVER', 'd3d12'),
         gz_sim,
         robot_state_publisher,
         spawn,

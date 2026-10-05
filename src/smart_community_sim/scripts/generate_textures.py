@@ -20,8 +20,10 @@ PKG = os.path.normpath(os.path.join(HERE, ".."))
 MAT = os.path.join(PKG, "materials")
 OUT = os.path.normpath(os.path.join(HERE, "..", "textures"))
 
-# 100 px/cm
-PX_PER_CM = 100
+# 纹理分辨率（px/cm）。原为 100，但在 WSLg 的 d3d12 核显渲染下，车辆背景
+# 贴图（34.5×25cm -> 3450×2500）会超出 ogre2 的纹理显存预算被丢弃、渲染成
+# 黑卡。降到 40 px/cm 后，车牌字符仍有 ~60px 高，OCR/识别完全够用。
+PX_PER_CM = 40
 
 # 车牌字体（黑体，贴近样例蓝牌字体；从 Windows 字体目录读取）
 _FONT_CANDIDATES = [

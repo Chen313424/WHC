@@ -45,6 +45,25 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration('rviz')
     slam = LaunchConfiguration('slam')
     autostart_patrol = LaunchConfiguration('autostart_patrol')
+    # ★ 是否把所有 Nav2 服务端合成到【一个】进程里跑。
+    #
+    #   实测（本 VM：8 vCPU / 4GB / Gazebo 走 llvmpipe 软渲染）：
+    #     · 只跑 Gazebo（server+GUI）           → 仿真实时因子 0.93
+    #     · Gazebo + Nav2 全栈（15 个独立进程） → 实时因子掉到 0.09~0.11
+    #   此时 vmstat 显示上下文切换 12000~16000/s、系统态 CPU 占 49~71%，
+    #   原因是每个 Nav2 服务端都是一个独立的 DDS 参与者，Fast DDS 在共享内存
+    #   上互相发现，进程一多开销爆炸。
+    #
+    #   后果很有迷惑性：不是"导航算法不对"，而是 /tf 只更新到 ~1.9Hz
+    #   （正常 50Hz），controller_server 于是报
+    #       RPPPathHandler: Lookup would require extrapolation into the future
+    #       Unable to transform robot pose into global plan's frame
+    #   每个目标都 abort —— 巡检 11 个站点全部超时失败，小车一步没动。
+    #
+    #   打开合成后 Nav2 只占一个进程、一个 DDS 参与者，上面这些开销基本消失。
+    #   默认 False = 保持导航组原来的行为（每节点独立进程，便于单独看日志、
+    #   单独重启某个节点，调试期这个好处很大）。资源紧的机器上再传 true。
+    use_composition = LaunchConfiguration('use_composition')
 
     declare_use_sim_time = DeclareLaunchArgument(
         'use_sim_time', default_value='true')
@@ -84,11 +103,22 @@ def generate_launch_description():
         'autostart_patrol', default_value='false',
         description='是否在启动后自动开始巡检（比赛演示用 true）')
 
+    # ★ 资源不足的机器上建议传 true：把全部 Nav2 服务端合成进一个进程，
+    #   大幅降低 DDS 参与者数量与上下文切换（详见上方 use_composition 注释）。
+    declare_use_composition = DeclareLaunchArgument(
+        'use_composition', default_value='False',
+        description='是否把所有 Nav2 服务端合成到一个进程里跑。'
+                    '默认 False（每节点独立进程，便于调试）；'
+                    'CPU/内存紧张的机器上传 True 可显著降低开销。'
+                    '★ 同样必须写 Python 风格的 True/False（首字母大写）')
+
     # ---------------- Nav2 完整导航栈 ----------------
     # 复用官方 nav2_bringup/bringup_launch.py，只覆盖我们自己的参数文件与地图。
-    # use_composition 设为 False：每个 Nav2 节点独立进程，
+    # use_composition 默认 False：每个 Nav2 节点独立进程，
     # 虽然内存占用略高，但**便于单独查看日志、单独重启某个节点**，
     # 在调试期这个好处远大于性能损失。
+    # ★ 资源紧张的机器上传 use_composition:=True 改写为单进程合成模式
+    #   （原因见上方 use_composition 的注释，实测能把实时因子从 0.09 救回来）。
     #
     # ★ slam 参数：为 true 时 bringup 会把 map_server + AMCL 换成 slam_toolbox，
     #   也就是【边建图边导航】。这有两个用途：
@@ -104,7 +134,7 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'params_file': params_file,
             'autostart': 'true',
-            'use_composition': 'False',
+            'use_composition': use_composition,
             'slam': slam,
         }.items(),
     )
@@ -156,6 +186,7 @@ def generate_launch_description():
         declare_rviz,
         declare_slam,
         declare_autostart,
+        declare_use_composition,
         nav2_launch,
         rviz_launch,
         patrol_node,

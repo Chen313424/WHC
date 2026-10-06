@@ -106,8 +106,8 @@ def aabb_corners(center: Vec3, size: Vec3) -> np.ndarray:
 def intrinsics_from_hfov(width: int, height: int, hfov_rad: float) -> tuple[float, float, float, float]:
     """由水平视场角推内参。Gazebo 默认正方形像素，故 fy = fx。
 
-    robot.xacro: width=640, height=480, horizontal_fov=1.0471975 (60deg)
-        fx = 320 / tan(30deg) ~= 554.256
+    robot.xacro: width=640, height=480, horizontal_fov=1.745329 (100deg)
+        fx = 320 / tan(50deg) ~= 268.5
     """
     fx = (width / 2.0) / math.tan(hfov_rad / 2.0)
     fy = fx

@@ -67,7 +67,10 @@ class TrafficController(Node):
         self.declare_parameter("publish_rate", 20.0)
         self.declare_parameter("image_width", 640)
         self.declare_parameter("image_height", 480)
-        self.declare_parameter("hfov", 1.0471975)
+        # ★ 与 robot.xacro 的 <horizontal_fov> 一致（场景重建后是 1.745329/100°）。
+        #   这个值直接决定 fy，进而决定由框长边估算的距离；
+        #   原来写成 1.0471975（60°）会把距离整体算大约 1.7 倍，停车点就不对了。
+        self.declare_parameter("hfov", 1.745329)
 
         gp = self.get_parameter
         self.mode = str(gp("mode").value)

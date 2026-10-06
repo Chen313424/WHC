@@ -61,11 +61,19 @@
     avoid_person: false            # 是否顺带实现“前方有人就停”
     person_danger_distance_m: 3.0
 
-    fail_safe: "go"            # 检测超时时的兜底：go | stop
-    detection_timeout: 0.7     # 秒；超过这么久没有新检测就启用兜底
+    # 检测超时时的兜底：go | stop
+    fail_safe: "go"
+    # 秒；超过这么久没有新检测就启用兜底。
+    # ★ 这个值必须大于检测器的发布周期，否则会一直走兜底（表现为"灯明明检测到了
+    #   却还是直行"）。GPU 机器上 YOLO11n@640 能跑到 10Hz+，0.7s 够用；
+    #   但本 VM 只有 CPU（8 vCPU）推理，实测发布周期约 1s，
+    #   所以这里放宽到 3.0s。CPU 机器上建议同时把检测器的 imgsz 降到 416 提速。
+    detection_timeout: 3.0
 
     publish_rate: 20.0
-    # 与 robot.xacro 对齐：640x480, horizontal_fov=1.0471975
+    # 与 robot.xacro 对齐：640x480, horizontal_fov=1.745329 (100deg)
+    # ★ 场景重建后 xacro 从 1.0471975(60deg) 改成了 1.745329；这里必须同步，
+    #   否则由框长边估算的距离会整体偏大约 1.7 倍（红灯停车的距离就错了）。
     image_width: 640
     image_height: 480
-    hfov: 1.0471975
+    hfov: 1.745329

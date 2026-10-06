@@ -89,7 +89,10 @@ class AutoLabelCapture(Node):
 
         self.declare_parameter("image_width", 640)
         self.declare_parameter("image_height", 480)
-        self.declare_parameter("hfov", 1.0471975)  # robot.xacro horizontal_fov
+        # ★ 必须与 robot.xacro 里相机的 <horizontal_fov> 逐字一致：
+        #   场景重建后 xacro 是 1.745329（100°），而这里原来写着 1.0471975（60°）。
+        #   内参错 1.7 倍会让 3D->2D 投影整体偏差，自动标注的框位置就不对了。
+        self.declare_parameter("hfov", 1.745329)
 
         self.declare_parameter("sample_period", 0.5)   # 仿真秒；同一时刻最多采一帧
         self.declare_parameter("min_visible", 0.30)   # 框至少 30% 在画面内才标注

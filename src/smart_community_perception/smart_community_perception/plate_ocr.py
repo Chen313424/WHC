@@ -7,10 +7,12 @@
 蓝底白字、同一套字体与排版）。这种情况下**模板匹配**比训练字符分类器
 更稳、更省事，而且不需要额外造字符级数据集：
 
-    1. 把 YOLO 给出的车牌框裁出来，缩放到贴图的标准尺寸
-    2. 二值化后按【竖直投影】自适应切出每个字符的位置（先剥掉外圈白框）
-    3. 每个字符与模板库做归一化互相关，取最高分 -> 输出该字符
-    4. 用「已知车牌白名单 + 编辑距离」做一致性校对；字符级不可信时
+    1. 把 YOLO 给出的车牌框裁出来；车牌在画面里往往是斜的，先在小角度网格上
+       "转正 + 裁内容包围盒"再继续（模板匹配对旋转极其敏感，实测偏 3° 就认错）
+    2. 缩放到贴图的标准尺寸
+    3. 二值化后按【竖直投影】自适应切出每个字符的位置（先剥掉外圈白框）
+    4. 每个字符与模板库做归一化互相关，取最高分 -> 输出该字符
+    5. 用「已知车牌白名单 + 编辑距离」做一致性校对；字符级不可信时
        才用整牌匹配兜底（且必须整牌得分够高，否则宁可报不确定）
 
 字符模板用**灰度**而不是二值图、尺寸 32x64：低分辨率下 `8` 与 `B`、
@@ -65,6 +67,19 @@ _PLATE_FALLBACK_MIN_SCORE = 0.55
 #: 白名单校对门槛：整牌相关度至少要有这么高，才允许把逐字结果"纠"成已知车牌
 _PLATE_SNAP_MIN_SCORE = 0.40
 
+#: 转正搜索：车牌在图像里可能是斜的（仿真里相机不会正对车牌；数据合成里也会把整车
+#: 贴片旋转 ±15°），而逐字模板匹配对旋转极其敏感 —— 实测偏 3° 就开始认错、15° 直接
+#: 认不出。根因是轴向包围盒把牌压扁（宽高比从标准的 3.17 掉到 2.0 左右），
+#: 缩放到 CANON 后字形被纵向压扁。所以按角度网格逐个"转正 + 裁内容包围盒"重试。
+_ROT_SEARCH_STEP_DEG = 2.0
+_ROT_SEARCH_SPAN_DEG = 20.0
+
+#: 正立视角就已经读出【已知车牌】且分数不低于它时直接返回，省掉整轮搜索
+_ROT_FAST_PATH_SCORE = 0.55
+
+#: 转正时判定"某像素属于填充区"的通道差阈值
+_DEROT_DIFF_TOL = 14
+
 
 def _default_textures_dir() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
@@ -108,6 +123,36 @@ def _mask_from_gray(gray: np.ndarray) -> np.ndarray:
     if gray.size == 0:
         return np.zeros_like(gray)
     return (gray > _otsu_threshold(gray)).astype(np.float32)
+
+
+def _border_fill(img: Image.Image) -> tuple[int, int, int]:
+    """取四边像素的中位数，作为旋转时的填充色。
+
+    用中位数而不是黑/白：填充区若与车牌底色差异过大会干扰后面的二值化。
+    """
+    a = np.asarray(img.convert("RGB"), dtype=np.int16)
+    edges = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]], axis=0)
+    return tuple(int(v) for v in np.median(edges, axis=0))
+
+
+def _derotate(img: Image.Image, angle: float) -> Image.Image | None:
+    """把「看起来偏了 angle 度」的车牌转回正立，并裁到内容包围盒。
+
+    ★ 只旋转是不够的：旋转后的画布仍带着填充区，把它直接缩放到 CANON 会把车牌
+      再压扁一次（这正是"偏 3° 就认不出"的直接原因）。必须再裁到【非填充内容】
+      的包围盒，让车牌本身填满画面，字符的宽高比才回到标准。
+    """
+    fill = _border_fill(img)
+    rot = img.rotate(angle, resample=Image.BICUBIC, expand=True, fillcolor=fill)
+    arr = np.asarray(rot.convert("RGB"), dtype=np.int16)
+    diff = np.abs(arr - np.array(fill, dtype=np.int16)).max(axis=2) > _DEROT_DIFF_TOL
+    ys, xs = np.where(diff)
+    if len(xs) < 12:
+        return None
+    crop = rot.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+    if crop.width < 8 or crop.height < 4:
+        return None
+    return crop
 
 
 def _to_gray_mask(img: Image.Image) -> np.ndarray:
@@ -221,11 +266,15 @@ def _crop_glyph_gray(gray: np.ndarray, mask: np.ndarray, x0: int, x1: int) -> Im
     """
     box = _glyph_box(mask, x0, x1)
     if box is None:
-        return Image.fromarray(np.zeros((4, 4), dtype=np.uint8))
+        # ★ 尺寸必须是 GLYPH_H x GLYPH_W：早先这里返回 4x4，_glyph_vector 就只有 16 维，
+        #   再和 2048 维模板做 np.dot 会直接抛 ValueError（recognize 曾被这个崩掉）。
+        return Image.fromarray(np.zeros((GLYPH_H, GLYPH_W), dtype=np.uint8))
     y0, y1, cx0, cx1 = box
     sub = gray[y0:y1, cx0:cx1]
     if sub.size == 0:
-        return Image.fromarray(np.zeros((4, 4), dtype=np.uint8))
+        # ★ 尺寸必须是 GLYPH_H x GLYPH_W：早先这里返回 4x4，_glyph_vector 就只有 16 维，
+        #   再和 2048 维模板做 np.dot 会直接抛 ValueError（recognize 曾被这个崩掉）。
+        return Image.fromarray(np.zeros((GLYPH_H, GLYPH_W), dtype=np.uint8))
     img = Image.fromarray(np.clip(sub, 0, 255).astype(np.uint8))
     return img.resize((GLYPH_W, GLYPH_H), Image.BILINEAR)
 
@@ -239,7 +288,13 @@ def _glyph_vector(img: Image.Image) -> np.ndarray:
 
 
 def _corr(a: np.ndarray, b: np.ndarray) -> float:
-    """两个已归一化向量的相关系数，范围 [-1, 1]。"""
+    """两个已归一化向量的相关系数，范围 [-1, 1]。
+
+    长度不一致时返回 -1（最低分）而不是抛异常：宁可判成"不像"，
+    也不能让识别过程崩掉 —— 巡检接口要求任何情况下都得给出回答。
+    """
+    if a.shape != b.shape:
+        return -1.0
     return float(np.dot(a, b))
 
 
@@ -342,11 +397,42 @@ class PlateOCR:
     # ---------------- 识别 ----------------
 
     def recognize(self, plate_crop_bgr) -> PlateResult:
-        """输入车牌区域的图像（PIL.Image 或 HxWx3 ndarray，BGR/RGB 都行），输出字符。"""
+        """输入车牌区域的图像（PIL.Image 或 HxWx3 ndarray，BGR/RGB 都行），输出字符。
+
+        ★ 车牌在画面里往往是【斜的】（仿真里相机不会正对车牌，数据合成里整车贴片也
+          会被旋转 ±15°），而逐字模板匹配对旋转极其敏感。所以这里先在"正立"假设下
+          试一次；只要没读出已知车牌，就在角度网格上逐个"转正 + 裁内容包围盒"重试，
+          取排序最好的结果（见 ``_derotate``）。正立就已经读出已知车牌时直接返回。
+        """
         img = self._as_image(plate_crop_bgr)
         if img is None:
             return PlateResult("", 0.0, "none")
 
+        best = self._recognize_upright(img)
+        if best.text in self._plate_texts.values() and best.score >= _ROT_FAST_PATH_SCORE:
+            return best
+
+        n = int(round(_ROT_SEARCH_SPAN_DEG / _ROT_SEARCH_STEP_DEG))
+        for i in range(-n, n + 1):
+            angle = i * _ROT_SEARCH_STEP_DEG
+            if angle == 0.0:
+                continue
+            view = _derotate(img, angle)
+            if view is None:
+                continue
+            r = self._recognize_upright(view)
+            if self._rank(r) > self._rank(best):
+                best = r
+        return best
+
+    def _rank(self, r: PlateResult) -> tuple:
+        """候选视角之间排序：读出已知车牌 > 有结果 > 分数高。"""
+        return (1 if r.text in self._plate_texts.values() else 0,
+                1 if r.ok else 0,
+                round(float(r.score), 4))
+
+    def _recognize_upright(self, img: Image.Image) -> PlateResult:
+        """【正立】假设下的一次识别。recognize 的搜索会对每个候选视角各调一次。"""
         img = img.resize((CANON_W, CANON_H), Image.LANCZOS)
         gray = _to_gray_array(img)
         mask = _mask_from_gray(gray)
@@ -445,6 +531,11 @@ class PlateOCR:
             return None
         if arr.dtype != np.uint8:
             arr = np.clip(arr, 0, 255).astype(np.uint8)
-        # 这里只用到亮度信息（白字 / 蓝底），BGR 与 RGB 的通道顺序差异
-        # 不影响二值化结果，所以不强行区分、避免猜错颜色通道。
-        return Image.fromarray(arr[:, :, :3])
+        # ★ ndarray 一律按 OpenCV/ROS 的 **BGR** 约定解释，必须先换成 RGB。
+        #   本项目所有帧都是 BGR：yolo_detector_node._to_numpy 明确把 rgb8 反成 BGR，
+        #   autolabel_capture_node 也用 cv_bridge 的 desired_encoding="bgr8"。
+        #   早先这里"不区分通道顺序"，实际是把 BGR 当 RGB 用，于是 ndarray 路径的灰度
+        #   与模板库（由 PIL 读的 RGB 贴图建立）不一致 —— 实测同一张牌：
+        #   传 PIL(RGB) 能读出 '黑T·U1KG9'（整牌 0.817），传 BGR ndarray 就退化成
+        #   '黑??????'。既有测试只传 PIL Image，所以这条真实路径一直没被覆盖。
+        return Image.fromarray(np.ascontiguousarray(arr[:, :, 2::-1]))

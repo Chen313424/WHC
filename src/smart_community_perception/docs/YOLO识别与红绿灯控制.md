@@ -263,8 +263,9 @@ cd src/smart_community_perception
 python test/test_offline.py        # 24 个用例：时序真值、针孔投影、光学系方向约定、
                                    #   世界→相机位姿链端到端投影、决策边界、
                                    #   生成的真值框与 SDF 是否一致
-python test/test_plate_ocr.py      # 14 个用例：车牌切字、三张已知车牌的字符还原、
-                                   #   缩放/模糊/亮度扰动后的鲁棒性、退化输入不误报
+python test/test_plate_ocr.py      # 22 个用例：车牌切字、三张已知车牌的字符还原、
+                                   #   缩放/模糊/亮度扰动后的鲁棒性、BGR ndarray 真实喂法、
+                                   #   倾斜车牌（±15°）、退化输入不崩不误报
 python test/test_result_payload.py # 巡检接口的结果 JSON 构造（三种 task 的正常与缺数据分支）
 ```
 
@@ -296,7 +297,7 @@ smart_community_perception/
 │   └── setup_train_env.ps1         # Windows 训练环境一键配置
 ├── test/
 │   ├── test_offline.py             # 几何/时序/决策（24）
-│   ├── test_plate_ocr.py           # 车牌字符输出（14）
+│   ├── test_plate_ocr.py           # 车牌字符输出（22）
 │   └── test_result_payload.py      # 巡检接口结果 JSON（51）
 └── models/                         # 权重放这里（默认 whc_yolo.pt）
 ```
@@ -340,7 +341,7 @@ smart_community_perception/
 仿真的 3 张车牌是固定贴图（`苏A·B8Q62` / `黑T·U1KG9` / `京C·HUU42`），
 字体排版完全一致，所以用**模板匹配**而不是训练字符分类器：
 
-1. 车牌框缩放到贴图标准尺寸（380×120）→ **Otsu 自适应二值化**
+1. 车牌框**转正**，再缩放到贴图标准尺寸（380×120）→ **Otsu 自适应二值化**
    （原来写死阈值 150，画面偏暗时切不出字）
 2. 先剥掉外圈白框（`plate_1` 的框是内缩 2~3 像素的），再按竖直投影自适应切字
 3. 逐字与模板库做归一化互相关，取最高分
@@ -349,6 +350,19 @@ smart_community_perception/
 
 字符模板用**灰度 32×64** 而不是二值小图：低分辨率下 `8`/`B`、`0`/`Q` 在
 二值小图上会混淆（实测把 `苏A·B8Q62` 认成 `苏A·BBQ62`）。
+
+两个实测踩到的坑，改动都在这里：
+
+* **车牌一定是斜的**（仿真里相机不会正对车牌，合成数据里整车贴片还带 ±15° 旋转）。
+  斜着看时检测框是"旋转矩形的轴向包围盒"，宽高比会从标准的 3.17 掉到 2.0 左右，
+  缩放到 380×120 后字形被纵向压扁 —— 实测**偏 3° 就开始认错、15° 直接认不出**。
+  所以正立试一次不够就按 2° 网格（±20°）逐个"反向旋转 + 裁到非填充内容包围盒"重试，
+  取排序最好的结果。实测倾斜牌识别率 **16% → 75%**（81 例对照）。
+* **ndarray 输入一律按 BGR 解释**（`yolo_detector_node._to_numpy` 把 `rgb8` 反成 BGR，
+  `autolabel_capture_node` 用 `desired_encoding="bgr8"`）。早先这里"不区分通道顺序"，
+  等于把 BGR 当 RGB 用，灰度与模板库（PIL 读的 RGB 贴图）对不上：同一张牌传 PIL 能读出
+  `黑T·U1KG9`（整牌 0.817），传 BGR ndarray 就退化成 `黑??????`。
+  自检用例因此专门覆盖了 BGR ndarray 路径。
 
 `plate_textures_dir` 留空时会自动找 `smart_community_sim` 的 share 目录；
 离线跑测试时用源码树相对路径即可。

@@ -40,6 +40,14 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
 
+    # GPU 渲染后端自动检测：WSLg 通过 /dev/dxg（DirectX）暴露显卡给 Mesa 的
+    # d3d12 驱动，原生直通则通过 /dev/dri。两者都没有就退回 llvmpipe 软件渲染
+    # （此时强制 d3d12 会因找不到 GPU 而段错误）。可用 gpu_driver:=xxx 覆盖。
+    has_gpu = os.path.isdir('/dev/dxg') or (
+        os.path.isdir('/dev/dri') and bool(os.listdir('/dev/dri')))
+    default_gpu_driver = 'd3d12' if has_gpu else 'llvmpipe'
+    gpu_driver = LaunchConfiguration('gpu_driver')
+
     # Gazebo Sim
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -87,11 +95,12 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
+        DeclareLaunchArgument('gpu_driver', default_value=default_gpu_driver),
         SetEnvironmentVariable('GZ_SIM_SYSTEM_PLUGIN_PATH', plugin_lib),
         SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),
-        # WSLg 下强制用 d3d12 硬件渲染（AMD Radeon 610M iGPU），否则 Mesa 会
-        # 回退到 llvmpipe 软件渲染，导致纹理超出显存预算、立牌/车牌全部变黑。
-        SetEnvironmentVariable('GALLIUM_DRIVER', 'd3d12'),
+        # 渲染后端：WSLg 有 /dev/dxg 时走 d3d12 硬件渲染，否则退回 llvmpipe。
+        SetEnvironmentVariable('GALLIUM_DRIVER', gpu_driver),
+        SetEnvironmentVariable('LIBGL_ALWAYS_SOFTWARE', '1' if not has_gpu else '0'),
         gz_sim,
         robot_state_publisher,
         spawn,

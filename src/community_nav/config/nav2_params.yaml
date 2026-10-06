@@ -1,0 +1,606 @@
+# =============================================================================
+#  community_nav —— Nav2 参数文件
+#  目标场地：4.2 m × 4.2 m 智慧社区仿真场地（小场地专用调参）
+#
+#  ⚠️ 状态：初版，基于 TurtleBot3 waffle 的尺寸与传感器推算，
+#     尚未在 Gazebo 中实测。需要用户按"调试顺序"逐项验证后修正。
+#
+#  ★ 本文件相对 Nav2 默认值做了大量改动。每处改动都写了"为什么"，
+#    这些注释就是技术方案文档"路径规划与导航算法细节"一节的素材。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# AMCL —— 蒙特卡洛定位（粒子滤波）
+# -----------------------------------------------------------------------------
+amcl:
+  ros__parameters:
+    use_sim_time: True
+
+    # ★★ 一键启动的关键：自动设置初始位姿，不需要人在 RViz 里点 "2D Pose Estimate"
+    #    比赛要求"一键启动、全程自主、不得人为干预"，人工点位姿是违规的。
+    set_initial_pose: true
+    # ★★ 初始位姿必须【与机器人出生点严格一致】
+    #     场景 SDF 里机器人出生在 (1.3, 1.3)，朝向 yaw = -1.5708（面向 -Y）。
+    #
+    #     原来这里写的是 (0, 0, 0) —— 偏了 1.3 米、还差 90°。
+    #     AMCL 的粒子从一开始就撒在错误的位置上，
+    #     表现为「车明明在原地，RViz 里位姿却飘在场地中心」「规划出的路径对不上」。
+    #     改出生点时，这里必须同步改。
+    initial_pose:
+      x: 1.3
+      y: 1.3
+      z: 0.0
+      yaw: -1.5708
+
+    # 坐标系链：map -> odom -> base_footprint -> base_scan
+    global_frame_id: "map"
+    odom_frame_id: "odom"
+    base_frame_id: "base_footprint"
+    scan_topic: scan
+    tf_broadcast: true
+
+    # ★ 场地只有 4.2m，激光最远也就打 4.2m 到墙。
+    #   默认值 100.0 会让远处噪声进入似然场计算，定位容易被带偏。
+    laser_max_range: 6.0        # 匹配雷达实际量程（原来 4.5 会丢远端数据）
+    laser_min_range: -1.0
+
+    # 观测模型：似然场（likelihood_field）对仿真环境最稳
+    laser_model_type: "likelihood_field"
+    laser_likelihood_max_dist: 1.0     # 默认 2.0，小场地缩小，加快收敛
+    sigma_hit: 0.2
+    z_hit: 0.9
+    z_rand: 0.1
+    z_max: 0.05
+    z_short: 0.05
+    lambda_short: 0.1
+    max_beams: 60
+
+    # 粒子数：小场地收敛快，粒子数可以减少，降低 CPU 占用（要给 Gazebo 留资源）
+    min_particles: 300
+    max_particles: 1500
+    pf_err: 0.05
+    pf_z: 0.99
+    resample_interval: 1
+    recovery_alpha_slow: 0.001
+    recovery_alpha_fast: 0.1
+
+    # 运动模型：差速驱动
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    alpha1: 0.2   # 旋转噪声
+    alpha2: 0.2
+    alpha3: 0.2   # 平移噪声
+    alpha4: 0.2
+    alpha5: 0.2
+
+    # ★ 更新阈值调小：小场地里机器人走得慢、位移小，
+    #   默认的 update_min_d=0.25m 会导致定位更新太稀疏，转弯时位姿漂移明显。
+    update_min_d: 0.10
+    update_min_a: 0.10
+
+    transform_tolerance: 1.0
+    save_pose_rate: 0.5
+    do_beamskip: false
+
+# -----------------------------------------------------------------------------
+# 地图服务器
+# -----------------------------------------------------------------------------
+map_server:
+  ros__parameters:
+    use_sim_time: True
+
+    # ★★ 这里【故意不写 yaml_filename】
+    #
+    #  地图路径的唯一来源是启动文件：
+    #      ros2 launch community_nav navigation.launch.py map:=<路径>
+    #  它默认指向 ~/smart_community_ws/src/community_nav/map/community_map.yaml
+    #  （navigation.launch.py 里会自动在 src 与 install 两处探测）。
+    #
+    #  为什么不能在这里写：写死一个【没有目录的文件名】时，map_server 会去
+    #  config/ 目录下找，找不到就报
+    #      [map_io] Failed processing YAML file community_map.yaml
+    #              for reason: bad file: community_map.yaml
+    #      [map_server] Failed to load map yaml file
+    #  然后生命周期管理器中止 bringup，连锁导致：
+    #      Failed to activate global_costmap because transform from
+    #      base_footprint to map did not become available before timeout
+    #  最后表现为「导航栈起不来、/amcl_pose 一直没有」，但最上面的报错
+    #  指向的是一个不起眼的文件名 —— 很难往参数文件上想。
+    #
+    #  这里写全路径也不行：workspace 路径因人而异，写死就把别人的环境搞坏了。
+    #  所以干脆不写，交给启动文件。
+
+map_saver:
+  ros__parameters:
+    use_sim_time: True
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: True
+
+# -----------------------------------------------------------------------------
+# 行为树导航器
+# -----------------------------------------------------------------------------
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+
+    # ★★ Jazzy / Nav2 1.3+ 的写法：用 navigators 列出导航器及其插件。
+    #    Humble 那套 plugin_lib_names（逐个列行为树节点库）在 Jazzy 上
+    #    【不能再写】—— Jazzy 会自动加载内置节点库，再列一遍会重复注册，
+    #    配置阶段直接报 "ID [...] already registered" 而失败。
+    #    plugin_lib_names 现在只用于注册【自定义】BT 节点，我们用不到，
+    #    所以这个键整个不出现。
+    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+
+    # ★ 用默认行为树即可。红绿灯停车等业务逻辑放在 community_patrol 节点里做，
+    #   不修改行为树 —— 升级 Nav2 版本时不会因为自定义 BT 而崩掉，
+    #   也降低了调试复杂度（工期紧张时的重要取舍）。
+
+bt_navigator_navigate_to_pose_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+bt_navigator_navigate_through_poses_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+# -----------------------------------------------------------------------------
+# 控制器服务器 —— 局部路径跟踪
+# -----------------------------------------------------------------------------
+controller_server:
+  ros__parameters:
+    use_sim_time: True
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      # ★ 小场地、慢速，默认 10s/0.5m 太宽松，卡住很久才报错。
+      #   收紧到 8s 内必须移动 0.15m，让"卡死"能被快速检测并触发恢复行为。
+      required_movement_radius: 0.15
+      movement_time_allowance: 8.0
+
+    general_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      # ★★ 到位精度直接决定视觉识别能不能拍到清楚的画面。
+      #   位置容差 8cm、角度容差约 6.9°（0.12 rad）。
+      #   角度容差不能太大：车头偏 15° 以上，车牌/人偶就会斜出视野。
+      #   也不能太小：差速车原地微调会来回抖动、耗时间。
+      xy_goal_tolerance: 0.08
+      yaw_goal_tolerance: 0.12
+
+    FollowPath:
+      # ★★ 选 Regulated Pure Pursuit 而不是默认的 DWB，理由：
+      #   1) RPP 有"路径跟随调节"：靠近障碍/急转弯时自动减速，更容易贴着车道走
+      #   2) 它是几何法，参数少、物理意义清晰，8 天工期下比 DWB 好调得多
+      #   3) 我们的场景是结构化车道（不是杂乱无章的障碍场），RPP 更合适
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+
+      # ★ 场地只有 4.2m，最大速度必须压下来。
+      #   默认 0.5 m/s 在这个尺寸下会冲过停止线、过弯甩出去。
+      desired_linear_vel: 0.18
+      # 角速度上限：太快会原地甩头，导致相机画面模糊
+      max_angular_vel: 0.8
+      min_angular_vel: 0.15
+      max_linear_accel: 0.4
+      max_linear_decel: 0.4
+      max_angular_accel: 1.5
+
+      # 前视距离：速度 0.18 m/s 时前视 0.25~0.4m 比较合适
+      lookahead_dist: 0.30
+      min_lookahead_dist: 0.20
+      max_lookahead_dist: 0.45
+      lookahead_time: 1.5
+      use_velocity_scaled_lookahead_dist: true
+
+      # 路径跟随调节：离路径越远越慢，逼着车回到车道中心
+      use_regulated_linear_velocity_scaling: true
+      use_cost_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.5    # 默认 0.9，小场地转弯半径小
+      regulated_linear_scaling_min_speed: 0.10
+
+      # 接近目标时减速，避免冲过停止线
+      use_approach_linear_velocity_scaling: true
+      approach_velocity_scaling_dist: 0.45
+
+      # 允许倒车（被堵住时能退出来），但不能倒太快
+      allow_reversing: true
+      max_allowed_time_to_collision_up_to_carrot: 1.5
+
+      transform_tolerance: 0.2
+      min_theta_velocity_threshold: 0.001
+      xy_goal_tolerance: 0.08
+      yaw_goal_tolerance: 0.12
+
+# -----------------------------------------------------------------------------
+# 局部代价地图 —— 用于动态避障
+# -----------------------------------------------------------------------------
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: True
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      rolling_window: true
+
+      # ★ 滚窗 3m×3m 足够：场地才 4.2m，障碍物都在身边
+      width: 3
+      height: 3
+      # ★ 分辨率 3cm（默认 5cm）：小场地用细网格，
+      #   代价地图边界更贴合障碍物，窄道里规划更精确
+      resolution: 0.03
+
+      robot_radius: 0.12       # ★ 自研车外接圆半径（底盘 20x14cm、轮距 18cm）
+      footprint_padding: 0.01
+
+      plugins: ["obstacle_layer", "inflation_layer"]
+      # ★ 注意：局部代价地图故意不加 static_layer。
+      #   局部只关心"眼前有没有障碍"，地图信息由全局代价地图负责。
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        # ★ 激光最大使用距离压到 3.5m：场地对角线 5.9m，
+        #   但超过 4.2m 的点一定是噪声（穿墙/反射），会在地图里留下鬼影
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.5
+          raytrace_min_range: 0.0
+          obstacle_max_range: 3.0
+          obstacle_min_range: 0.0
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # ★★★ 这是整个文件里最关键的一处改动 ★★★
+        #   Nav2 默认 inflation_radius = 0.55 m。
+        #   我们的车道宽只有 0.8~1.0 m，如果按默认值膨胀，
+        #   车道两侧的膨胀区会连成一片，整条车道变成全高代价区，
+        #   规划器会直接"无路可走"或乱窜 —— 这是新手最常踩的坑。
+        #   0.28 m = 机器人半径 0.22 + 6cm 安全余量。
+        inflation_radius: 0.20
+        # ★ cost_scaling_factor 调大：让代价从障碍物向外衰减得更快，
+        #   使车道中心保持低代价，规划器自然走中线（这是"不压线"的关键手段之一）
+        cost_scaling_factor: 6.0
+
+      # ★ 官方默认开启：每次都把完整代价地图发给 RViz。
+      #   不开的话 RViz 里可能只看到局部一块，录视频时画面会缺内容。
+      always_send_full_costmap: True
+      transform_tolerance: 0.3
+
+local_costmap_client:
+  ros__parameters:
+    use_sim_time: True
+local_costmap_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+# -----------------------------------------------------------------------------
+# 全局代价地图 —— 用于全局路径规划
+# -----------------------------------------------------------------------------
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: True
+      update_frequency: 2.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      # ★ 场地 4.2m，地图加边界后 5m 足够
+      width: 5
+      height: 5
+      resolution: 0.03
+
+      # ★ 未知区域按"有障碍"处理，避免规划器抄近路穿过未探索区域
+      track_unknown_space: true
+
+      robot_radius: 0.12       # ★ 自研车外接圆半径（底盘 20x14cm、轮距 18cm）
+      footprint_padding: 0.01
+
+      # ★★ 与局部不同：全局必须加 static_layer（来自 SLAM 地图）
+      #    和 keepout_filter（强制走车道，见下方说明）
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.5
+          obstacle_max_range: 3.0
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.20
+        cost_scaling_factor: 6.0
+
+      # ★★★ 强制车道合规的核心手段 ★★★
+      #   问题：仿真场地里的"车道线"是**画在地板上的纹理**，
+      #         2D 激光雷达**扫不到地面标线**，只能扫到墙和立体障碍物。
+      #         因此代价地图里根本不存在车道线，规划器不会知道
+      #         "这里不能走"，它会直接抄近路压线。
+      #
+      #   解决方案（二选一，推荐 A）：
+      #     A. KeepoutFilter：手工画一张掩膜图（mask），把"不可行驶区域"
+      #        标成禁区，规划器就不会越过车道线。
+      #     B. 在 Gazebo 里把车道线建模成**几厘米高的矮墙**，
+      #        让激光雷达能扫到，代价地图自然形成通道。
+      #
+      #   下面这几行默认注释掉，等掩膜图做好再打开。
+      #   ⚠️ 注意参数名：KeepoutFilter 插件读的是 filter_info_topic，
+      #      掩膜图的话题是在 costmap_filter_info_server 节点上配的（mask_topic）。
+      #   # plugins: ["static_layer", "obstacle_layer", "inflation_layer", "keepout_filter"]
+      #   # keepout_filter:
+      #   #   plugin: "nav2_costmap_2d::KeepoutFilter"
+      #   #   enabled: True
+      #   #   filter_info_topic: "/costmap_filter_info"
+
+      always_send_full_costmap: True
+      transform_tolerance: 0.3
+
+global_costmap_client:
+  ros__parameters:
+    use_sim_time: True
+global_costmap_rclcpp_node:
+  ros__parameters:
+    use_sim_time: True
+
+# -----------------------------------------------------------------------------
+# 全局规划器
+# -----------------------------------------------------------------------------
+planner_server:
+  ros__parameters:
+    use_sim_time: True
+    expected_planner_frequency: 5.0
+    planner_plugins: ["GridBased"]
+
+    GridBased:
+      # ★ 选 SmacPlanner2D（不是默认的 NavFn），理由：
+      #   1) 它是 A* 的改进版，支持代价惩罚项，能主动远离车道边缘
+      #   2) 支持平滑输出，路径更贴合车道中心线
+      #   3) 比 NavFn（Dijkstra）在小场地里的行为更可预测
+      plugin: "nav2_smac_planner::SmacPlanner2D"
+      tolerance: 0.1
+      downsample_costmap: false
+      # ★★ cost_penalty 调高：让规划器"宁可绕远也不贴边"，
+      #    这是保证不压线的重要参数。默认 1.5，这里提到 5.0。
+      cost_penalty: 5.0
+      allow_unknown: false       # ★ 未知区域不通行，防止规划出穿墙路径
+      max_planning_time: 2.0
+      max_iterations: 100000
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+
+# -----------------------------------------------------------------------------
+# 平滑器
+# -----------------------------------------------------------------------------
+smoother_server:
+  ros__parameters:
+    use_sim_time: True
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+# -----------------------------------------------------------------------------
+# 恢复行为
+# -----------------------------------------------------------------------------
+behavior_server:
+  ros__parameters:
+    use_sim_time: True
+
+    # ★★ 重要：Humble 的参数名是 costmap_topic / footprint_topic（单数）。
+    #    较新版本（Nav2 1.2+）改成了 local_costmap_topic / global_costmap_topic。
+    #    在 Humble 上写成新名字不会被识别，恢复行为会拿不到代价地图数据，
+    #    卡住时无法脱困。下面按 Nav2 Humble 官方写法配置。
+    # ★★ Jazzy 的参数名（Humble 是 costmap_topic / footprint_topic）
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors::Spin"
+    backup:
+      plugin: "nav2_behaviors::BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors::DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors::Wait"
+
+    # ★ 官方默认 global_frame 是 odom（不是 map）。
+    #   恢复行为只在局部范围内动作，用 odom 更稳。
+    global_frame: odom
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.2
+
+    # ★★ 恢复行为的距离和角度都要按小场地缩小！
+    #   默认 max_rotational_vel 1.0 / min 0.4 在 0.8m 宽的车道里
+    #   会直接把车顶到墙上，越恢复越糟。
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 0.8
+    min_rotational_vel: 0.15
+    rotational_acc_lim: 1.5
+
+# -----------------------------------------------------------------------------
+# 多点巡检（FollowWaypoints action 服务端）
+# -----------------------------------------------------------------------------
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: True
+    loop_rate: 20
+    stop_on_failure: false        # ★ 单站失败不终止整体流程，继续跑后面的站点
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      # ★ 每个站点停车后停留 2 秒，给视觉组留出拍照与推理时间。
+      #   实际时长要和视觉组联调确定（推理耗时 + 稳定时间）。
+      waypoint_pause_duration: 2000
+
+# -----------------------------------------------------------------------------
+# 速度平滑器 —— 抑制加减速突变，让录出来的视频画面更稳
+# -----------------------------------------------------------------------------
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: True
+    smoothing_frequency: 20.0
+    scale_velocities: False
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.26, 0.0, 1.0]       # [vx, vy, wz]
+    min_velocity: [-0.10, 0.0, -1.0]     # 允许小幅倒车
+    max_accel: [0.5, 0.0, 1.5]
+    max_decel: [-0.5, 0.0, -1.5]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
+
+# -----------------------------------------------------------------------------
+# 机器人状态发布（与 Nav2 官方参数文件保持一致）
+# -----------------------------------------------------------------------------
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: True
+
+# =============================================================================
+#  【调试顺序建议】—— 不要一次全开，按这个顺序逐项验证
+#
+#  1. 先只启动 Gazebo + 机器人，确认 /scan 有数据、TF 树完整（ros2 run tf2_tools view_frames）
+#  2. 启动 slam_toolbox 建图，确认地图能正常生成（RViz 里能看到墙的轮廓）
+#  3. 存图，然后用 navigation.launch.py 加载地图 + AMCL
+#     → 检查 RViz 里激光点是否贴合地图墙壁（贴合 = 定位正确）
+#  4. 发一个单点导航目标，观察：
+#     - 全局路径是否在车道中间（不在 → 调 cost_penalty / inflation）
+#     - 是否撞墙（撞 → 调 inflation_radius / robot_radius）
+#     - 到位角度是否准（不准 → 调 yaw_goal_tolerance）
+#  5. 再上多点巡检（FollowWaypoints）
+#  6. 最后加红绿灯停车和 keepout 掩膜
+# =============================================================================
+
+# =============================================================================
+#  Nav2 Jazzy 新增组件
+#
+#  【为什么必须有这几段】
+#  Nav2 1.3（Jazzy）比 Humble 多出几个节点，nav2_bringup 会把它们一并交给
+#  生命周期管理器去 configure + activate。**参数文件里少了任何一段**，
+#  对应节点就会在 configure 阶段报：
+#       Error while getting parameters: parameter 'xxx' is not initialized
+#  然后生命周期管理器中止（Failed to bring up all requested nodes），
+#  连带 controller_server / bt_navigator 也全都停在 inactive ——
+#  表现为"发导航目标毫无反应"，很难想到根因是"少了一段参数"。
+#
+#  实测踩到过：少了 collision_monitor 一段，整条导航链路起不来。
+# =============================================================================
+
+route_server:
+  ros__parameters:
+    use_sim_time: True
+    boundary_radius_to_achieve_node: 1.0
+    radius_to_achieve_node: 2.0
+    smooth_corners: true
+    operations: ["AdjustSpeedLimit", "ReroutingService", "CollisionMonitor"]
+    ReroutingService:
+      plugin: "nav2_route::ReroutingService"
+    AdjustSpeedLimit:
+      plugin: "nav2_route::AdjustSpeedLimit"
+    CollisionMonitor:
+      plugin: "nav2_route::CollisionMonitor"
+      max_collision_dist: 3.0
+    edge_cost_functions: ["DistanceScorer", "CostmapScorer"]
+    DistanceScorer:
+      plugin: "nav2_route::DistanceScorer"
+    CostmapScorer:
+      plugin: "nav2_route::CostmapScorer"
+
+collision_monitor:
+  ros__parameters:
+    use_sim_time: True
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_out_topic: "cmd_vel"
+    state_topic: "collision_monitor_state"
+    transform_tolerance: 0.2
+    source_timeout: 1.0
+    base_shift_correction: True
+    stop_pub_timeout: 2.0
+
+    # Nav2 Jazzy 新增的可选安全监控器。我们用它的默认形态：
+    # 只做"接近检测"，不做急停 —— 避免在 0.40m 窄车道里误触发把巡检打断。
+    #
+    # ⚠️ 两个实测踩到的坑：
+    #  1) observation_sources 不能设成空列表 []，
+    #     否则节点在启动阶段直接崩溃：
+    #         parameter_value_from failed for parameter 'observation_sources':
+    #         No parameter value set
+    #         process has died [exit code -6]
+    #  2) 它会持续查询 base_footprint -> odom 的 TF，日志里会出现
+    #         Extrapolation Error ... Requested time 135.8 but latest is 39.2
+    #     这是它的时钟与 TF 时间戳不同步导致的，【不影响导航功能】，
+    #     但会把日志刷屏 —— 排查别的问题时记得先把这些行过滤掉。
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: False
+      enabled: True
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "scan"
+      min_height: 0.15
+      max_height: 2.0
+      enabled: True
+
+# -----------------------------------------------------------------------------
+# docking_server（自动回充）已移除
+# -----------------------------------------------------------------------------
+# 本场地没有自动充电桩任务，且 Jazzy 的 docking 依赖 opennav_docking 插件，
+# 它不在 navigation2 主包里，需额外安装 ros-jazzy-opennav-docking。为减少依赖、
+# 避免 bringup 因找不到插件而失败，这里不配置 docking_server。
+# 若后续加入充电桩，请先 sudo apt install ros-jazzy-opennav-docking 再补回本段。

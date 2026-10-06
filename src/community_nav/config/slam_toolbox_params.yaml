@@ -1,0 +1,135 @@
+# =============================================================================
+#  slam_toolbox 参数 —— 建图模式
+#  目标场地：4.2 m × 4.2 m 智慧社区场地
+#
+#  ⚠️ 状态：初版，未实测。需按"调试顺序"验证后修正。
+#
+#  ★ 选型说明（技术文档 / 答辩素材）：
+#    官方文件提到的 Gmapping / Cartographer / Hector 均为 ROS 1 时代方案。
+#    在 ROS 2 中我们选 slam_toolbox，理由：
+#      1) ROS 2 官方 Nav2 推荐搭配的 SLAM 方案，生态契合度最高
+#      2) 基于图优化（Karto + Ceres），比 Gmapping 的粒子滤波在大场景下更稳，
+#         且**支持建图后原地切换为纯定位模式**，无需换框架
+#      3) 支持在线异步建图（async），建图时不影响其他节点实时性
+#      4) 支持地图序列化/反序列化，便于复现与答辩演示
+# =============================================================================
+
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: True
+
+    # ---- 求解器：Ceres 后端 + 舒尔补预处理（ROS 2 标配组合） ----
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+
+    # ---- 坐标系与话题 ----
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan
+    mode: mapping              # 建图用 mapping；纯定位时改 localization
+
+    # ---- 地图输出 ----
+    # ★ 分辨率 3cm，与 Nav2 代价地图保持一致。
+    #   不一致会导致静态层栅格化时出现"墙变胖/变瘦"的伪影。
+    # ★★ 分辨率 0.03 -> 0.01
+    #
+    #   场景里最关键的识别目标是人偶立牌：宽 5cm、厚 5mm。
+    #   0.03m 的格子装不下它 —— 一个立牌只占 1.7 格，画出来就是一个黑点，
+    #   18 个人偶在地图上看起来像"十几个散点"，完全看不出形状。
+    #   改成 0.01m 后一个立牌占 5 格，能看出是一块立着的板子。
+    #
+    #   代价：栅格数从 143x142 涨到约 420x420，建图和代价地图的 CPU 开销上升。
+    #   4.2m 的场地完全撑得住，实测建图速度无明显下降。
+    resolution: 0.01
+    # ★ 默认 5.0 秒才更新一次地图，建图时几乎看不到实时效果，
+    #   答辩视频里需要"边走边出图"的画面，压到 1.0 秒。
+    map_update_interval: 1.0
+    # ★★ max_laser_range 必须匹配机器人激光雷达的【实际量程】
+    #     新机器人 robot.xacro 里 <range><max>6</max>，即 6.0 m
+    #     场地对角线 = sqrt(4.2^2 + 4.2^2) ≈ 5.94 m
+    #
+    #   历史：这里原来写 3.5（沿用 TurtleBot3 burger 的雷达量程）。
+    #   换成本项目的自研车后没有同步，只能用到雷达 58% 的量程 ——
+    #   机器人站在场地一角时，4 米外的对面墙直接超过阈值被丢弃，
+    #   表现为「远端墙面扫得又薄又断、地图边界不完整」。
+    max_laser_range: 6.0
+
+    # ---- 运行控制 ----
+    debug_logging: false
+    throttle_scans: 1
+    transform_publish_period: 0.02
+    transform_timeout: 0.5
+    tf_buffer_duration: 30.0
+    stack_size_to_use: 40000000
+    enable_interactive_mode: true
+
+    # ---- 扫描匹配（占用的核心参数） ----
+    use_scan_matching: true
+    use_scan_barycenter: true
+    # ★★ 默认 minimum_travel_distance = 0.5m。场地只有 4.2m，
+    #    0.5m 才处理一帧会导致转弯处栅格严重错位、墙角糊成一团。
+    #    压到 0.15m，小场地建图质量提升明显。
+    # ★ 让机器人每走 8cm 就采一帧，墙面和立牌采样更连续
+    minimum_travel_distance: 0.08
+    # ★ 每转 0.08rad 采一帧，转弯处不丢数据
+    minimum_travel_heading: 0.08      # 默认 0.5 rad，同样压小
+    # ★ 时间间隔也压一半，配合同步降距离阈值
+    minimum_time_interval: 0.1
+
+    # ---- 扫描缓冲 ----
+    scan_buffer_size: 10
+    scan_buffer_maximum_scan_distance: 4.5
+
+    # ---- 帧间匹配 ----
+    link_match_minimum_response_fine: 0.1
+    link_scan_maximum_distance: 1.5
+
+    # ---- 回环检测 ----
+    # ★ 场地小且是环路（绕两个街区一圈），回环检测非常重要：
+    #   没有回环，跑完一圈回到起点时地图会"裂开"、墙体出现重影。
+    do_loop_closing: true
+    loop_search_maximum_distance: 3.0
+    loop_match_minimum_chain_size: 10
+    loop_match_maximum_variance_coarse: 3.0
+    loop_match_minimum_response_coarse: 0.35
+    loop_match_minimum_response_fine: 0.45
+
+    # ---- 相关性搜索空间 ----
+    correlation_search_space_dimension: 0.5
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.1
+
+    # ---- 回环搜索空间 ----
+    loop_search_space_dimension: 8.0
+    loop_search_space_resolution: 0.05
+    loop_search_space_smear_deviation: 0.03
+
+    # ---- 惩罚项 ----
+    distance_variance_penalty: 0.5
+    angle_variance_penalty: 1.0
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
+    use_response_expansion: true
+
+# =============================================================================
+#  【验证标准】建图质量怎么判断
+#
+#  1. RViz 里看到的墙线应该是**细而直的白色轮廓**，不是一团糊
+#  2. 绕场一周回到起点后，**起点附近的墙不能出现双层/重影**
+#     （出现重影 = 回环检测没生效或里程计漂移过大）
+#  3. 地图里不应有"鬼影"——即场地中央出现的孤立黑点
+#     （有 = 激光噪声，调小 max_laser_range / raytrace_max_range）
+#  4. 保存出的 community_map.pgm 用图片查看器打开应该能看出场地轮廓
+#
+#  存图命令：
+#    ros2 run nav2_map_server map_saver_cli -f ~/smart_community_ws/src/community_nav/map/community_map
+#  会生成 community_map.pgm + community_map.yaml 两个文件，都必须提交。
+# =============================================================================

@@ -95,7 +95,7 @@
       <static>true</static>
       <pose>-0.39999999999999997 1.3 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>2.0 0.4 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>2.0 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>2.0 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_top_edge_n">
@@ -165,7 +165,7 @@
       <static>true</static>
       <pose>-1.4 0.65 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>0.4 1.3 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>0.4 1.3 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>0.4 1.3 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_left_edge_e">
@@ -214,7 +214,7 @@
       <static>true</static>
       <pose>-0.7999999999999999 0.0 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>1.2 0.4 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>1.2 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>1.2 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_mid_edge_n">
@@ -263,7 +263,7 @@
       <static>true</static>
       <pose>-0.2 -0.65 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>0.4 1.3 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>0.4 1.3 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>0.4 1.3 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_central_edge_e">
@@ -312,7 +312,7 @@
       <static>true</static>
       <pose>0.19999999999999998 -1.3 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>0.8 0.4 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>0.8 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>0.8 0.4 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_bottom_edge_n">
@@ -354,7 +354,7 @@
       <static>true</static>
       <pose>0.6 0.0 0.01 0 0 0.0</pose>
       <link name="link">
-<collision name='c'><geometry><box><size>0.4 2.6 0.02</size></box></geometry></collision><visual name='v'><geometry><box><size>0.4 2.6 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
+<visual name='v'><geometry><box><size>0.4 2.6 0.02</size></box></geometry><material><ambient>0.3 0.3 0.32 1</ambient><diffuse>0.3 0.3 0.32 1</diffuse></material></visual>
       </link>
     </model>
     <model name="road_right_edge_e">

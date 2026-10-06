@@ -1,29 +1,55 @@
-# 智慧社区仿真（第八届全球校园人工智能算法精英大赛·算法应用赛·省赛）
+# 智慧社区 · 复赛工程代码
 
-ROS 2 Jazzy + Gazebo Harmonic 仿真场景，对齐省赛 4.2m×4.2m 场地规格与示意图布局：
+> 第八届全球校园人工智能算法精英大赛 · 算法应用赛（赛马制）· 智慧社区
+>
+> 本工作空间包含 **社区仿真场景**、**SLAM 建图**、**Nav2 自主导航**、**多点巡检调度** 四部分，
+> 由仿真组、导航组共同交付，视觉组在本接口约定上开发识别节点。
 
-- **场地**：4.2m×4.2m 方形地板，四周围墙（厚 0.5cm、高 50cm）
-- **环形闭合车道**：带边线与道路中心虚线，道路侧边留白 60cm，路宽 40cm；
-  车道上橙黄色箭头标记行驶方向（顺时针：顶→东、右→南、底→西、左→北）
-- **2 组红绿灯**（顶部直道 / 底部直道，整体 48×64×5cm，箱体 59×14×5cm 带双腿），
-  各带停止线；下方红绿灯北侧有斑马线人行横道。时序：红灯 10s / 绿灯 15s / 黄灯 5s
-- **18 个人偶立牌**（高 15cm × 宽 5cm × 厚 0.5cm）：
-  A 街区（左上）6 人 + B 街区（左下）6 人 + 人行道 6 人，其中 2 人为非社区人员（F1/F2）
-- **右侧停车场**：3/2/1 号 3 个停车位（各宽 60cm，从上到下），每车位停 1 个车背景立牌
-  （34.5×25cm）+ 车牌（9.5×3cm）；另设 1 台车辆背景模型
-- **起点/终点合并**：场地右上角
+## 1. 系统组成
 
-> 交付物：ROS 工作空间源代码，根目录含本 README 说明编译运行步骤。
+| 包 | 交付方 | 职责 |
+|---|---|---|
+| `smart_community_sim` | 仿真组 | 社区世界、机器人模型、贴图、红绿灯插件、ROS-Gazebo 桥接 |
+| `community_nav` | 导航组 | 建图与导航启动文件、Nav2/SLAM 参数、巡检站点表、地图 |
+| `community_patrol` | 导航组 | 多点巡检调度节点（编排导航 + 触发视觉识别 + 响应红绿灯） |
 
-## 环境要求
+## 2. 技术栈
 
-- Ubuntu 24.04 (Noble) / WSL2
-- ROS 2 Jazzy
-- Gazebo Harmonic (`gz-sim`，需含开发头文件 `libgz-sim8-dev` 以编译红绿灯插件)
-- `ros_gz_sim`、`ros_gz_bridge`、`robot_state_publisher`、`xacro`、`teleop_twist_keyboard`
-- Python 3 + Pillow（仅在**重新生成**纹理/世界时需要，仓库已带生成产物）
+| 项目 | 版本 |
+|---|---|
+| 操作系统 | Ubuntu 24.04 (Noble)，WSL2 亦可 |
+| ROS 2 | Jazzy |
+| 仿真器 | Gazebo Harmonic（gz-sim 8） |
+| 导航 | Nav2 1.3 |
+| 建图 | slam_toolbox（2D 激光 SLAM） |
+| 定位 | AMCL |
+| 全局规划器 | SmacPlanner2D（A\*） |
+| 局部控制器 | Regulated Pure Pursuit |
 
-## 编译
+## 3. 环境要求
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ros-jazzy-desktop \
+  ros-jazzy-ros-gz \
+  ros-jazzy-navigation2 \
+  ros-jazzy-nav2-bringup \
+  ros-jazzy-slam-toolbox \
+  ros-jazzy-xacro \
+  ros-jazzy-teleop-twist-keyboard \
+  python3-colcon-common-extensions \
+  python3-yaml \
+  build-essential cmake \
+  fonts-noto-cjk \
+  libgz-sim8-dev
+```
+
+- `libgz-sim8-dev`：编译 `plugins/traffic_light/` 红绿灯插件所需。
+- `fonts-noto-cjk`：Gazebo / RViz 中文显示。
+- `ros-jazzy-ros-gz`：`ros_gz_bridge`、`ros_gz_sim`。
+
+## 4. 编译
 
 ```bash
 cd ~/smart_community_ws
@@ -32,92 +58,137 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-首次编译会同时编译红绿灯系统插件 `libTrafficLightSystem.so`，安装到
-`install/smart_community_sim/lib/`，启动脚本会自动把它加入
-`GZ_SIM_SYSTEM_PLUGIN_PATH`。
+工作空间须位于 Linux 原生文件系统（如 `~/smart_community_ws`），放在 `/mnt/c`、`/mnt/d` 下编译会显著变慢。
 
-## 运行
+## 5. 运行
 
-```bash
-ros2 launch smart_community_sim smart_community.launch.py
-```
-
-启动后出现 Gazebo GUI（省赛场地 + 机器人），可用键盘遥控：
+### 5.1 启动社区场景
 
 ```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 launch community_nav sim.launch.py
 ```
 
-查看传感器数据：
+等价于直接 `ros2 launch smart_community_sim smart_community.launch.py`（sim.launch.py 只是多加了启动前残留进程检查）。启动后可自检：
 
 ```bash
-ros2 topic echo /odom
-ros2 topic echo /scan
-ros2 topic echo /camera/image_raw   # 或 rqt_image_view / rviz2 查看
+ros2 topic hz /scan            # 激光雷达
+ros2 topic hz /odom            # 里程计
+ros2 topic hz /camera/image_raw  # 相机图像
 ```
 
-## 目录结构
-
-```
-src/smart_community_sim/
-├── worlds/smart_community.sdf        # 省赛世界（由 scripts/generate_world.py 生成）
-├── robot/robot.xacro                 # 巡检机器人（差分底盘 + 360° 雷达 + 单目相机）
-├── launch/smart_community.launch.py  # 一键启动（世界 + 机器人 + 桥接 + 插件路径）
-├── config/bridge.yaml                # ros_gz_bridge 桥接配置（含 frame_id 覆盖）
-├── materials/                        # 原始模型图（人偶 / 车牌 / 车背景 / 红绿灯）
-├── textures/                         # 由 materials 生成的 PNG 纹理（立牌贴图等）
-├── scripts/
-│   ├── generate_textures.py          # 生成 textures/（离线、可复现）
-│   └── generate_world.py             # 生成 worlds/smart_community.sdf
-└── plugins/traffic_light/            # 红绿灯时序控制 gz-sim 系统插件（C++）
-```
-
-### 重新生成场景
-
-仓库已附带生成产物（`worlds/*.sdf`、`textures/*.png`），直接使用即可。
-如需改动布局/纹理，改对应脚本后重跑：
+### 5.2 建图
 
 ```bash
-cd src/smart_community_sim
-python3 scripts/generate_textures.py   # 重新生成 PNG 纹理
-python3 scripts/generate_world.py      # 重新生成世界 SDF
+ros2 launch community_nav mapping.launch.py
+ros2 run teleop_twist_keyboard teleop_twist_keyboard   # 键盘遥控走遍场地
 ```
 
-## 红绿灯时序
+### 5.3 保存地图
 
-| 灯色 | 时长 |
-|---|---|
-| 绿灯 | 15 s |
-| 黄灯 | 5 s |
-| 红灯 | 10 s |
+```bash
+mkdir -p ~/smart_community_ws/src/community_nav/map
+ros2 run community_nav save_map.py \
+    -f ~/smart_community_ws/src/community_nav/map/community_map
+```
 
-循环：绿(15s) → 黄(5s) → 红(10s) → 重复。**2 组红绿灯同一时序、同步切换**。
-时长可在 `worlds/smart_community.sdf` 的 `<green_time>` / `<yellow_time>` /
-`<red_time>` 中调整。插件按模型名前缀 `traffic_light` 自动发现灯泡
-（每个模型内 `red` / `yellow` / `green` 三个 `<visual>`，与灯泡排列方向无关）。
+产出 `community_map.pgm` 与 `community_map.yaml`，两个文件均须提交。
 
-## 传感器 / 话题
+### 5.4 导航 + 多点巡检
 
-| 数据 | ROS2 话题 | 帧名 | 方向 |
-|---|---|---|---|
-| 速度指令 | `/cmd_vel` | — | ros → gz |
-| 里程计 | `/odom` | `odom` → `base_footprint` | gz → ros |
-| 坐标变换 | `/tf` | `odom` → `base_footprint` | gz → ros |
-| 激光雷达 | `/scan` | `lidar_link` | gz → ros |
-| 相机图像 | `/camera/image_raw` | `camera_link` | gz → ros |
-| 相机内参 | `/camera/camera_info` | `camera_link` | gz → ros |
+```bash
+# 演示模式：加载地图 + AMCL 定位，自动按站点表巡检
+ros2 launch community_nav navigation.launch.py autostart_patrol:=true
 
-TF 树：`odom` → `base_footprint`（OdometryPublisher 插件）→
-`base_link` → `lidar_link` / `camera_link` / 车轮（robot_state_publisher）。
+# 调试模式：巡检节点启动但不自动开始，可在 RViz 用 "2D Goal Pose" 手动逐个验证
+ros2 launch community_nav navigation.launch.py
 
-> 说明：SLAM（slam_toolbox）与导航（Nav2）由队友负责，本场景保证上述话题
-> 与帧名干净（无 `model/robot` 前缀），可直接对接。
+# 边建图边导航（尚无地图时）
+ros2 launch community_nav navigation.launch.py slam:=True
+```
 
-## 常见问题
+> Nav2 的 launch 参数按 **Python 字面量** 求值，布尔值须写 `True` / `False`。
 
-- **启动报 `executable 'ros_gz_bridge' not found`**：本机 Jazzy 的 YAML 配置
-  桥接可执行文件名为 `bridge_node`（启动脚本已用正确名称）。
-- **红绿灯插件加载失败**：确认已 `colcon build`，插件装在
-  `install/smart_community_sim/lib/`；启动脚本会自动设置
-  `GZ_SIM_SYSTEM_PLUGIN_PATH`。
-- **无 GPU / WSL 无法开 GUI**：Gazebo GUI 需要 WSLg（`DISPLAY` 已配）。
+### 5.5 一键演示脚本
+
+```bash
+bash src/community_nav/scripts/run_patrol_demo.sh            # 自动巡检
+bash src/community_nav/scripts/run_patrol_demo.sh --no-rviz  # 不开 RViz
+bash src/community_nav/scripts/run_patrol_demo.sh --build    # 先编译
+```
+
+## 6. 视觉组对接接口（重要）
+
+完整说明见 [`docs/vision_interface.md`](docs/vision_interface.md)，这里给最简版：
+
+**导航组 → 视觉组（视觉组订阅）：**
+
+| 话题 | 类型 | 含义 |
+|---|---|---|
+| `/camera/image_raw` | `sensor_msgs/Image` | 相机画面（帧名 `camera_link`） |
+| `/camera/camera_info` | `sensor_msgs/CameraInfo` | 相机内参 |
+| `/patrol/capture` | `std_msgs/String`(JSON) | 到点后触发一次识别：`{"waypoint_id","task","zone","slot","target","stamp"}` |
+| `/patrol/status` | `std_msgs/String`(JSON) | 巡检进度/事件 |
+
+**视觉组 → 导航组（导航组订阅）：**
+
+| 话题 | 类型 | 内容 |
+|---|---|---|
+| `/traffic_light/state` | `std_msgs/String` | `RED` / `YELLOW` / `GREEN`（大写） |
+| `/detection/result` | `std_msgs/String` | 识别结果（任意字符串，建议 JSON） |
+
+## 7. 目录结构
+
+```
+smart_community_ws/
+├── README.md                        ← 本文件
+├── docs/vision_interface.md         ← 视觉组接口约定
+└── src/
+    ├── smart_community_sim/         ← 仿真组交付
+    │   ├── worlds/smart_community.sdf    社区世界
+    │   ├── robot/robot.xacro             巡检机器人（差速底盘 + 360° 雷达 + 相机）
+    │   ├── textures/                     贴图
+    │   ├── plugins/traffic_light/        红绿灯时序 gz-sim 插件（C++）
+    │   ├── config/bridge.yaml            ros_gz_bridge 桥接配置
+    │   └── launch/smart_community.launch.py
+    │
+    ├── community_nav/               ← 导航组交付
+    │   ├── launch/
+    │   │   ├── sim.launch.py             启动社区场景
+    │   │   ├── mapping.launch.py         建图
+    │   │   ├── mapping_minimal.launch.py 建图（后备版本）
+    │   │   └── navigation.launch.py      导航 + 巡检
+    │   ├── config/
+    │   │   ├── nav2_params.yaml          Nav2 全部参数
+    │   │   ├── slam_toolbox_params.yaml  SLAM 参数
+    │   │   └── community_waypoints.yaml  巡检站点表
+    │   ├── map/                          建图产物
+    │   └── scripts/                      存图 / keepout 掩膜 / 一键演示
+    │
+    └── community_patrol/            ← 导航组交付
+        └── community_patrol/patrol_node.py   巡检调度核心逻辑
+```
+
+## 8. 巡检站点表
+
+`src/community_nav/config/community_waypoints.yaml` 定义巡检站点，每站含 `id`、`name`、
+`x`、`y`、`yaw` 与到点后动作（`none` / `capture` / `traffic_light` / `finish`）。
+`capture` 站带 `task`（`outsider_detect` / `crowd_count` / `plate_ocr`）、`zone`、`slot`、`target` 字段，
+这些字段会原样放进 `/patrol/capture` 触发消息里，视觉组据此决定识别什么。
+
+## 9. 本次合并修复说明
+
+- 机器人底盘抬高 0.02、DiffDrive 显式指定 `/model/robot/cmd_vel` 话题（修复车趴地 / 车不动）。
+- 启动脚本 GPU 后端自动检测 `dev/dxg`（WSLg）与 `/dev/dri`，无 GPU 退回 llvmpipe。
+- 移除 6 块 2cm 路面薄板的碰撞体（只保留视觉），车辆可正常压过路面；4 面围墙保留碰撞。
+- `mapping.launch.py` 的 `ROS_DISTRO` 由 `humble` 修正为 `jazzy`。
+- 移除 `nav2_params.yaml` 里依赖 `opennav_docking` 的 `docking_server` 段（本场地无充电桩）。
+- 修复巡检节点对 `target` 字段的透传，并统一工作空间路径（原代码多处写死 `~/ros2_ws`）。
+
+> ⚠️ 地图 `src/community_nav/map/community_map.pgm/.yaml` 是当前世界版本的建图产物。
+> **最终世界布局锁定后，请导航组重新建图覆盖**，保证地图与场景完全一致。
+
+## 10. 常见问题
+
+- **启动报 `executable 'ros_gz_bridge' not found`**：Jazzy 的 YAML 桥接可执行文件名是 `bridge_node`（启动脚本已用正确名称）。
+- **红绿灯插件加载失败**：确认已 `colcon build`，插件装在 `install/smart_community_sim/lib/`。
+- **无 GPU / WSL 无法开 GUI**：Gazebo GUI 需要 WSLg（`DISPLAY` 已配）；无 GPU 时启动脚本自动退回 llvmpipe 软件渲染。

@@ -34,10 +34,13 @@
   <!-- ===== base_link（底盘，中心位于轮轴高度） ===== -->
   <link name="base_link">
     <visual>
+      <!-- 底盘盒抬高 0.02，避免底部低于轮底导致车趴地、轮子悬空空转 -->
+      <origin xyz="0 0 0.02"/>
       <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
       <material name="chassis_blue"/>
     </visual>
     <collision>
+      <origin xyz="0 0 0.02"/>
       <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
     </collision>
     <inertial>
@@ -150,6 +153,9 @@
       <right_joint>right_wheel_joint</right_joint>
       <wheel_separation>${wheel_separation}</wheel_separation>
       <wheel_radius>${wheel_radius}</wheel_radius>
+      <!-- 显式指定速度指令话题：部分 gz-sim 版本/机器上默认话题名不是
+           /model/robot/cmd_vel，会导致 bridge 发进来的 cmd_vel 车不动 -->
+      <topic>/model/robot/cmd_vel</topic>
       <odom_publish_frequency>50</odom_publish_frequency>
       <odom_topic>/model/robot/diffdrive_odom</odom_topic>
       <tf_topic>/model/robot/diffdrive_tf</tf_topic>

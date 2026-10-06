@@ -24,6 +24,27 @@ export GALLIUM_DRIVER=llvmpipe
 export LP_NUM_THREADS=4
 unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_DRI3_DISABLE
 
+# ★★ 必须换成 CycloneDDS，这是本机能不能跑动的【决定性因素】。
+#
+#   实测（同一场景、同一台 8 vCPU VM，只用 ros_gz_bridge、不含 Nav2）：
+#       RMW_IMPLEMENTATION=rmw_fastrtps_cpp   → Gazebo 实时因子 0.007
+#       RMW_IMPLEMENTATION=rmw_cyclonedds_cpp → Gazebo 实时因子 1.006
+#   实时因子差 140 倍，而 CPU 占用几乎一样（ruby 145%+99%、bridge 20%）。
+#
+#   原因是 Fast DDS 默认走共享内存传输，在 vCPU 较多的虚拟机上会大量自旋/
+#   发 IPI，`vmstat` 里能直接看到上下文切换被推到 30000~42000/s、系统态
+#   占 22~44%，仿真时钟被拖到几乎不走；还会在 /dev/shm 堆出上百个
+#   fastrtps_* 段。CycloneDDS 没有这个问题。
+#
+#   表现出来是"导航算法像坏的"：/tf 只更新几 Hz → controller_server 报
+#       RPPPathHandler: Lookup would require extrapolation into the future
+#       Unable to transform robot pose into global plan's frame
+#   每个目标都 abort、小车一步不动 —— 很容易误判成导航栈或 TF 配置有问题。
+#
+#   注意：所有 ROS 进程（含 ros2 CLI 轮询、bridge、patrol_node）必须用同一个
+#   RMW，否则互相看不到话题。这里统一 export，子进程自然继承。
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
 WS="$HOME/smart_community_ws"
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
@@ -102,6 +123,19 @@ echo
 echo "[5/5] Nav2 就绪，现在才开始巡检（替换掉 launch 里那个未启动的 patrol 节点）"
 pkill -9 -f 'community_patrol' 2>/dev/null
 sleep 2
+
+# ★ 先起 cmd_vel 中继，再开始巡检。
+#   原因：collision_monitor 虽然 active 且输入 20Hz 有数据，却【从不】往
+#   cmd_vel_out_topic(/cmd_vel) 发布 —— 速度指令被整条吞掉，Gazebo 收不到，
+#   小车一步不动（详见 tools/cmd_vel_relay.py 的说明）。
+#   这个中继把 /cmd_vel_smoothed 直通到 /cmd_vel 绕过它，是临时绕行。
+pkill -9 -f cmd_vel_relay 2>/dev/null
+sleep 1
+nohup python3 "$(dirname "$0")/cmd_vel_relay.py" > /tmp/relay.log 2>&1 &
+sleep 5
+echo "      cmd_vel 中继: $(pgrep -f cmd_vel_relay | wc -l) 个进程"
+timeout 8 ros2 topic hz /cmd_vel 2>/dev/null | grep -a 'average rate' | tail -1 | sed 's/^/      \/cmd_vel: /'
+
 nohup ros2 run community_patrol patrol_node --ros-args \
     -r __node:=community_patrol \
     -p use_sim_time:=true \

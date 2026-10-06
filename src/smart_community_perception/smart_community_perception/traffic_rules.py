@@ -3,7 +3,10 @@
 设计要点
 --------
 1. **状态来自时序，不靠猜**：世界插件 TrafficLightSystem 的时序是
-   `绿(15s) -> 黄(3s) -> 红(10s)`、`phase = fmod(simTime, 28)`。
+   `绿(15s) -> 黄(5s) -> 红(10s)`、`phase = fmod(simTime, 30)`。
+   ★ 2026-10 建模组重建场景时把黄灯从 3s 改成了 5s（官方文档写的是 3s，
+   SDF 里实际是 5s），本文件必须与 SDF 同步 —— 否则自动标注会在黄灯那一段
+   把真值标成红灯/绿灯，训练出来的模型颜色判断是错的。
    自动标注阶段可以直接用仿真时间算出真值状态；推理阶段则由 YOLO 分类。
    两个函数都放在这里，保证「标注用的定义」与「训练/评测用的定义」一致。
 
@@ -25,15 +28,28 @@ CLASS_NAMES: list[str] = [
     "traffic_light_red",
     "traffic_light_yellow",
     "traffic_light_green",
-    "person",
+    "person_community",
+    "person_noncommunity",
     "license_plate",
 ]
 
 CLS_TL_RED = 0
 CLS_TL_YELLOW = 1
 CLS_TL_GREEN = 2
-CLS_PERSON = 3
-CLS_PLATE = 4
+# ★ 2026-10 把原来的单一 person 类拆成社区 / 非社区两类。
+#   依据是世界 SDF 里 18 个人偶立牌的贴图：
+#       person_a1~a5 / person_b1~b5 / person_s1~s6 -> person_community_NN.png   （16 个）
+#       person_f1 / person_f2                        -> person_noncommunity_NN.png（ 2 个）
+#   赛题要求「非社区人员辨别」，所以必须让模型直接分出这两类，
+#   而不是靠颜色后处理猜。
+CLS_PERSON_COMMUNITY = 3
+CLS_PERSON_NONCOMMUNITY = 4
+CLS_PLATE = 5
+
+# 两类人偶的集合（做「前方是否有人」判断时两类都要算）
+PERSON_CLASSES = {CLS_PERSON_COMMUNITY, CLS_PERSON_NONCOMMUNITY}
+# 兼容旧代码里用的单一人偶类名
+CLS_PERSON = CLS_PERSON_COMMUNITY
 
 CLASS_TO_ID = {name: i for i, name in enumerate(CLASS_NAMES)}
 TL_CLASSES = {CLS_TL_RED, CLS_TL_YELLOW, CLS_TL_GREEN}
@@ -52,25 +68,29 @@ TL_CLASS_TO_STATE = {
 STATE_TO_TL_CLASS = {v: k for k, v in TL_CLASS_TO_STATE.items()}
 
 # 各目标的「最大边长」(米)，用于 bbox 长边 -> 距离的相似三角形估算。
-# 数值由 tools/sdf_to_objects.py 从 world SDF 实测得出（见 config/world_objects.yaml）：
-#   traffic_light_1 : [0.24, 0.18, 0.78]  竖排灯箱 -> 长边 0.78
-#   traffic_light_2 : [0.18, 0.74, 0.24]  横排灯箱 -> 长边 0.74
-#   两者取 0.76 折中；因为用的是「长边」，横竖两种排布共用同一尺度。
-#   person          : [0.5, 0.63, 1.83]（含头部球）-> 1.83
-#   license_plate   : [0.5, 0.02, 0.16]          -> 0.5
+# ★ 数值直接来自重建后世界 SDF（smart_community.sdf）里各 visual 的 <size>：
+#   traffic_light_1（竖排）housing [0.14, 0.05, 0.59]  -> 长边 0.59
+#   traffic_light_2（横排）housing [0.59, 0.05, 0.14]  -> 长边 0.59
+#     两者都是 0.59，所以横竖两种排布共用同一尺度参数。
+#     【不含灯腿】—— 灯腿又细又长（0.025×0.025×0.3/0.48），
+#     混进包围盒会把框拉成细长条，破坏距离估计。
+#   person（立牌）    [0.05, 0.005, 0.15]              -> 长边 0.15
+#   license_plate     [0.095, 0.002, 0.03]             -> 长边 0.095
+#   （官方规格：人偶立牌 高15cm 宽5cm 厚5mm；车牌 3×9.5cm —— 与 SDF 一致）
 OBJECT_MAX_EXTENT_M: dict[int, float] = {
-    CLS_TL_RED: 0.76,
-    CLS_TL_YELLOW: 0.76,
-    CLS_TL_GREEN: 0.76,
-    CLS_PERSON: 1.83,
-    CLS_PLATE: 0.50,
+    CLS_TL_RED: 0.59,
+    CLS_TL_YELLOW: 0.59,
+    CLS_TL_GREEN: 0.59,
+    CLS_PERSON_COMMUNITY: 0.15,
+    CLS_PERSON_NONCOMMUNITY: 0.15,
+    CLS_PLATE: 0.095,
 }
 
 
 def traffic_light_state_from_sim_time(
     sim_time: float,
     green_time: float = 15.0,
-    yellow_time: float = 3.0,
+    yellow_time: float = 5.0,
     red_time: float = 10.0,
 ) -> str:
     """复刻 TrafficLightSystem.cc 的时序，返回 'green' / 'yellow' / 'red'。
@@ -261,7 +281,7 @@ def any_person_ahead(
     x_hi = image_width * (0.5 + roi_x_ratio / 2.0)
     nearest: Optional[float] = None
     for det in detections:
-        if det.cls_id != CLS_PERSON or det.score < min_score:
+        if det.cls_id not in PERSON_CLASSES or det.score < min_score:
             continue
         if not (x_lo <= det.center_x_px <= x_hi):
             continue

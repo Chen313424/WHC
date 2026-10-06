@@ -1,3 +1,11 @@
+﻿# ★★ 本文件必须保存为【带 UTF-8 BOM】！
+#   PowerShell 5.1 在没有 BOM 时会按 GBK 解码本文件，中文注释/字符串被拆坏，
+#   脚本直接报 "Unexpected token '`n==='" 之类的一堆语法错误、整段跑不起来。
+#   本仓库已实测踩过两次：加过 BOM 之后只要再用编辑器/工具改写一次就会丢。
+#   改完请确认前 3 个字节是 EF BB BF，例如：
+#       [IO.File]::ReadAllBytes($p)[0..2]   # 应为 239 187 191
+#   或者临时转成纯 ASCII 输出也可以接受。
+#
 # 一键配置 YOLO 训练环境（Windows / PowerShell）
 #
 # 解决三个本机特有的坑：
@@ -71,7 +79,14 @@ if (-not $SkipWeights) {
         Write-Host "已存在，跳过: $dst"
     } else {
         try {
-            Invoke-WebRequest -Uri $WeightUrl -OutFile $dst -TimeoutSec 300
+            # ★ 用 Python 的 urllib 下载，不要用 Invoke-WebRequest。
+            #   本机 .NET 的 TLS 走 Schannel，在受限环境下会报
+            #       "基础连接已经关闭: 接收时发生错误"
+            #   实测 pypi.tuna / download.pytorch.org / hf-mirror 三个地址
+            #   用 Invoke-WebRequest 全部失败，用 Python urllib 全部 200。
+            #   pip 能装成功也是因为它用的是 Python 自带的 OpenSSL。
+            & $Vpy -c "import urllib.request,sys;req=urllib.request.Request(sys.argv[1],headers={'User-Agent':'setup_train_env'});open(sys.argv[2],'wb').write(urllib.request.urlopen(req,timeout=300).read())" $WeightUrl $dst
+            if (-not (Test-Path $dst)) { throw "下载未产生文件" }
             $sizeMB = [math]::Round((Get-Item $dst).Length / 1MB, 2)
             Write-Host "已下载 yolo11n.pt ($sizeMB MB) -> $dst" -ForegroundColor Green
         } catch {

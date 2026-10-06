@@ -7,91 +7,116 @@
 objects:
   - name: traffic_light_1
     class: traffic_light
-    model_pose: [0, 19.5, 0, 0, 0, 3.14159]
-    center: [0, 0, 2]
-    size: [0.24, 0.18, 0.78]
+    model_pose: [-0.6, 1.55, 0, 0, 0, 0]
+    center: [0, 0.023, 0.42]
+    size: [0.14, 0.096, 0.59]
   - name: traffic_light_2
     class: traffic_light
-    model_pose: [0, -19.5, 0, 0, 0, 0]
-    center: [0, 0, 2]
-    size: [0.18, 0.74, 0.24]
+    model_pose: [-0.4, -1.55, 0, 0, 0, 3.14159]
+    center: [0, 0.023, 0.41]
+    size: [0.59, 0.096, 0.14]
   - name: person_a1
-    class: person
-    model_pose: [-22, 5, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-1.08, 0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_a2
-    class: person
-    model_pose: [-18, 8, 0, 0, 0, 1.5708]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.95, 0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_a3
-    class: person
-    model_pose: [-14, 5, 0, 0, 0, 3.14159]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.82, 0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_a4
-    class: person
-    model_pose: [-24, 9, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.69, 0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_a5
-    class: person
-    model_pose: [-12, 9, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.56, 0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_b1
-    class: person
-    model_pose: [-20, -5, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-1.08, -0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_b2
-    class: person
-    model_pose: [-16, -8, 0, 0, 0, 1.5708]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.95, -0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_b3
-    class: person
-    model_pose: [-12, -5, 0, 0, 0, 3.14159]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.82, -0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_b4
-    class: person
-    model_pose: [-23, -8, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
+    class: person_community
+    model_pose: [-0.69, -0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
   - name: person_b5
-    class: person
-    model_pose: [-10, -8, 0, 0, 0, 0]
-    center: [0, 0.015, 0.915]
-    size: [0.5, 0.63, 1.83]
-  - name: car_a/plate_front
+    class: person_community
+    model_pose: [-0.56, -0.625, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s1
+    class: person_community
+    model_pose: [-0.6, 1.7, 0.075, 0, 0, 3.14159]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s2
+    class: person_community
+    model_pose: [-1, 1.7, 0.075, 0, 0, 3.14159]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s3
+    class: person_community
+    model_pose: [-1.7, 0.9, 0.075, 0, 0, 1.5708]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s4
+    class: person_community
+    model_pose: [-1.7, -0.2, 0.075, 0, 0, 1.5708]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s5
+    class: person_community
+    model_pose: [-0.6, -1.7, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_s6
+    class: person_community
+    model_pose: [-1, -1.7, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_f1
+    class: person_noncommunity
+    model_pose: [0.9, 1.7, 0.075, 0, 0, 3.14159]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: person_f2
+    class: person_noncommunity
+    model_pose: [1, -1.7, 0.075, 0, 0, 0]
+    center: [0, 0, 0]
+    size: [0.05, 0.005, 0.15]
+  - name: car_3/plate
     class: license_plate
-    model_pose: [30, 11, 0, 0, 0, 0]
-    center: [0, 2, 0.55]
-    size: [0.5, 0.02, 0.16]
-  - name: car_a/plate_rear
+    model_pose: [1.7, -0.55, 0.125, 0, 0, 0]
+    center: [-0.08, 0.0035, -0.09]
+    size: [0.095, 0.002, 0.03]
+  - name: car_2/plate
     class: license_plate
-    model_pose: [30, 11, 0, 0, 0, 0]
-    center: [0, -2, 0.55]
-    size: [0.5, 0.02, 0.16]
-  - name: car_b/plate_front
+    model_pose: [1.7, -1.15, 0.125, 0, 0, 0]
+    center: [-0.08, 0.0035, -0.09]
+    size: [0.095, 0.002, 0.03]
+  - name: car_1/plate
     class: license_plate
-    model_pose: [30, 6, 0, 0, 0, 0]
-    center: [0, 2, 0.55]
-    size: [0.5, 0.02, 0.16]
-  - name: car_b/plate_rear
-    class: license_plate
-    model_pose: [30, 6, 0, 0, 0, 0]
-    center: [0, -2, 0.55]
-    size: [0.5, 0.02, 0.16]
-  - name: car_c/plate_front
-    class: license_plate
-    model_pose: [30, 1, 0, 0, 0, 0]
-    center: [0, 2, 0.55]
-    size: [0.5, 0.02, 0.16]
-  - name: car_c/plate_rear
-    class: license_plate
-    model_pose: [30, 1, 0, 0, 0, 0]
-    center: [0, -2, 0.55]
-    size: [0.5, 0.02, 0.16]
+    model_pose: [1.7, -1.75, 0.125, 0, 0, 0]
+    center: [-0.08, 0.0035, -0.09]
+    size: [0.095, 0.002, 0.03]

@@ -37,6 +37,9 @@ from smart_community_perception.geometry import (  # noqa: E402
 from smart_community_perception.traffic_rules import (  # noqa: E402
     Action,
     CLS_PERSON,
+    CLS_PERSON_COMMUNITY,
+    CLS_PERSON_NONCOMMUNITY,
+    CLS_PLATE,
     CLS_TL_GREEN,
     CLS_TL_RED,
     CLS_TL_YELLOW,
@@ -85,19 +88,21 @@ def find_object(objects: list[dict], name: str) -> dict:
 
 
 def test_traffic_light_state_matches_plugin():
-    """必须与 TrafficLightSystem.cc 的 绿15/黄3/红10 完全一致。"""
+    """必须与 TrafficLightSystem.cc 的 绿15/黄5/红10（周期 30s）完全一致。"""
     cases = [
         (0.0, "green"),
         (7.5, "green"),
         (14.999, "green"),
         (15.0, "yellow"),
-        (17.999, "yellow"),
-        (18.0, "red"),
-        (27.999, "red"),
-        (28.0, "green"),   # 一个周期
-        (43.0, "yellow"),  # 28 + 15
-        (46.0, "red"),     # 28 + 18
-        (56.0, "green"),   # 两个周期
+        (18.0, "yellow"),    # 15 <= t < 20 都是黄灯
+        (19.999, "yellow"),
+        (20.0, "red"),
+        (29.999, "red"),
+        (30.0, "green"),     # 一个周期
+        (45.0, "yellow"),    # 30 + 15
+        (49.999, "yellow"),
+        (50.0, "red"),       # 30 + 20
+        (60.0, "green"),     # 两个周期
     ]
     for t, expected in cases:
         got = traffic_light_state_from_sim_time(t)
@@ -204,18 +209,30 @@ def test_optical_frame_convention():
 def test_world_camera_chain_and_traffic_light_projection():
     """端到端：spawn 偏移 + /odom + 相机外参 + 真值框投影。
 
-    机器人放到中央路 (0, 12) 朝北(+Y)，traffic_light_1 在 (0, 19.5)，
-    灯箱中心高 2.0m。相机最终应落在 (0, 12.15, 0.20)。
+    spawn 是 world->odom（与 launch 的 x/y/z/Y 一致；重建后场地为 4.2m 见方）。
+    机器人放到场地右下角 (0.6, -1.3) 朝北(+Y)——回字形环线最右侧竖直道路的
+    主行驶方向；相机外参 (前 0.15、上 0.05 轮半径 + 0.10) 合成后，
+    相机光心应落在 world (0.6, -1.15, 0.20)。
+
+    traffic_light_1 的箱体中心在 world (-0.6, 1.573, 0.42)：
+    相机左前方（西 1.2m、北 2.72m、高 0.22m），水平偏角 23.8°，
+    投影中心 (u, v) ≈ (75.4, 194.4)，最近角点深度 2.675m。
     """
-    spawn = [32.0, 14.0, 0.05, 0.0, 0.0, 1.5708]          # 与 launch 一致
-    world_T_robot = pose_to_matrix([0.0, 12.0, 0.05, 0.0, 0.0, math.pi / 2])
+    spawn = [1.3, 1.3, 0.05, 0.0, 0.0, -1.5708]           # 与 launch 一致
+    world_T_robot = pose_to_matrix([0.6, -1.3, 0.05, 0.0, 0.0, math.pi / 2])
     odom_T_robot = invert(pose_to_matrix(spawn)) @ world_T_robot
     odom_pose6 = matrix_to_pose(odom_T_robot)
 
+    # 链条中段：/odom 读数是机器人相对 spawn 的位姿。
+    # 场地右下角 (0.6,-1.3) 相对 spawn (1.3,1.3) = 前进 2.6m、右移 0.7m、掉头 180°。
+    assert abs(odom_pose6[0] - 2.6) < 1e-4, odom_pose6
+    assert abs(odom_pose6[1] + 0.7) < 1e-4, odom_pose6
+    assert abs(abs(odom_pose6[5]) - math.pi) < 1e-4, odom_pose6
+
     T = world_to_camera(spawn, odom_pose6, 0.05, [0.15, 0.0, 0.10, 0.0, 0.0, 0.0])
     cam_pos = camera_center_in_world(T)
-    assert abs(cam_pos[0] - 0.0) < 1e-6, cam_pos
-    assert abs(cam_pos[1] - 12.15) < 1e-6, cam_pos
+    assert abs(cam_pos[0] - 0.6) < 1e-6, cam_pos
+    assert abs(cam_pos[1] + 1.15) < 1e-6, cam_pos
     assert abs(cam_pos[2] - 0.20) < 1e-6, cam_pos
 
     objects = load_objects(OBJECTS_YAML)
@@ -225,48 +242,126 @@ def test_world_camera_chain_and_traffic_light_projection():
     bbox, depth = aabb_to_bbox(
         T, tl1["model_pose"], tl1["center"], tl1["size"], K, 640, 480, min_visible=0.3
     )
-    assert bbox is not None, "红绿灯在正前方 7.35m 却没被投影出来，坐标链有问题"
+    assert bbox is not None, "红绿灯在前方 2.7m 却没被投影出来，坐标链有问题"
     x1, y1, x2, y2 = bbox
-    # 水平方向在画面正中（灯就在正前方）
-    assert abs((x1 + x2) / 2.0 - 320.0) < 2.0, bbox
-    # 竖直方向在画面上半部（灯高 2.0m > 相机 0.2m，故 v < cy）
-    assert 60.0 < y1 < 95.0, bbox
-    assert 118.0 < y2 < 145.0, bbox
-    # 灯箱宽 0.24m @ ~7.3m -> 约 18px
-    assert 12.0 < (x2 - x1) < 26.0, bbox
-    # 最近角点深度 ~ 7.35 - 0.09
-    assert 7.0 < depth < 7.5, depth
+    # 整个灯箱必须完整落在画面内
+    assert 0.0 < x1 < x2 < 640.0 and 0.0 < y1 < y2 < 480.0, bbox
+    # 水平方向：灯在车体左前方（西 1.2m / 北 2.72m），故框心在画面左侧 1/4 处
+    assert abs((x1 + x2) / 2.0 - 75.4) < 2.0, bbox
+    # 竖直方向：箱体顶 0.715m、底 0.125m，相机高 0.20m -> v 跨 133.3 ~ 255.5
+    assert abs(y1 - 133.3) < 2.5, bbox
+    assert abs(y2 - 255.5) < 2.5, bbox
+    # 箱体 0.14 宽 / 0.096 深，2.7m 处斜视 -> 约 37px（只按正视算会是 28.9px）
+    assert 34.0 < (x2 - x1) < 40.0, bbox
+    # 最近角点深度 = 2.675m（相机到箱体近侧面）
+    assert abs(depth - 2.675) < 0.01, depth
 
-    # 距离估计应接近真实距离
+    # 距离估计：长边 122px 正好是 0.59m 的灯箱高，估回来还是同一个 2.675m
     det = Detection(CLS_TL_RED, 0.9, x1, y1, x2, y2)
     dist = estimate_distance_m(det, K[1])
-    assert dist is not None and 5.5 < dist < 9.5, dist
+    assert dist is not None and abs(dist - 2.675) < 0.05, dist
+
+
+def world_aabb(obj: dict) -> tuple[list[float], list[float]]:
+    """按 YAML 语义「世界角点 = model_pose 变换 (center ± size/2)」算出世界系 AABB。
+
+    返回 (min_xyz, max_xyz)，用来把生成的真值框拉回 SDF 手算的世界坐标核对。
+    """
+    t = pose_to_matrix(obj["model_pose"])
+    c = np.array(obj["center"], dtype=float)
+    h = np.array(obj["size"], dtype=float) / 2.0
+    pts = [
+        (t @ np.append(c + np.array([sx, sy, sz]) * h, 1.0))[:3]
+        for sx in (-1.0, 1.0)
+        for sy in (-1.0, 1.0)
+        for sz in (-1.0, 1.0)
+    ]
+    arr = np.array(pts)
+    return arr.min(axis=0).tolist(), arr.max(axis=0).tolist()
 
 
 def test_generated_world_objects():
-    """校验 sdf_to_objects.py 的产物与 SDF 手算一致。"""
+    """校验 sdf_to_objects.py 的产物与重建后的 SDF 手算一致。
+
+    重建场地（4.2m×4.2m）真值目标共 23 个：
+      2 组红绿灯 + 16 社区人立牌 + 2 非社区人立牌 + 3 车牌。
+    数量、类别、模型位姿、局部包围盒都要能逐项对回
+    smart_community.sdf 里的 <pose> 与 <size>，否则自动标注会把框画歪。
+    """
     objects = load_objects(OBJECTS_YAML)
     classes = {}
     for o in objects:
         classes[o["class"]] = classes.get(o["class"], 0) + 1
     assert classes.get("traffic_light") == 2, classes
-    assert classes.get("person") == 10, classes
-    assert classes.get("license_plate") == 6, classes
+    assert classes.get("person_community") == 16, classes
+    assert classes.get("person_noncommunity") == 2, classes
+    assert classes.get("license_plate") == 3, classes
+    assert len(objects) == 23, len(objects)
 
+    # 社区/非社区的划分必须与贴图一致（赛题要辨非社区人员，分错类整条链路都错）
+    community = {o["name"] for o in objects if o["class"] == "person_community"}
+    assert community == (
+        {f"person_a{i}" for i in range(1, 6)}
+        | {f"person_b{i}" for i in range(1, 6)}
+        | {f"person_s{i}" for i in range(1, 7)}
+    ), community
+    noncommunity = {o["name"] for o in objects if o["class"] == "person_noncommunity"}
+    assert noncommunity == {"person_f1", "person_f2"}, noncommunity
+
+    # ---- traffic_light_1（竖排）：SDF pose "-0.6 1.55 0 0 0 0" ----
+    # housing box(0.14,0.05,0.59) @ z=0.42 + 三颗 r=0.045 灯球 @ y=0.026
+    # -> 局部包围盒 center y=0.023 / z=0.42，size (0.14, 0.096, 0.59)（不含灯腿）
     tl1 = find_object(objects, "traffic_light_1")
-    # 红灯 z=2.3+0.09, 绿灯 z=1.7-0.09 -> 跨度 0.78, 中心 2.0
-    assert abs(tl1["size"][2] - 0.78) < 1e-6, tl1
-    assert abs(tl1["center"][2] - 2.0) < 1e-6, tl1
+    assert all(
+        abs(a - b) < 1e-6 for a, b in zip(tl1["model_pose"], [-0.6, 1.55, 0.0, 0.0, 0.0, 0.0])
+    ), tl1
+    assert all(abs(a - b) < 1e-6 for a, b in zip(tl1["size"], [0.14, 0.096, 0.59])), tl1
+    assert abs(tl1["center"][1] - 0.023) < 1e-6, tl1
+    assert abs(tl1["center"][2] - 0.42) < 1e-6, tl1
+    lo, hi = world_aabb(tl1)
+    # 世界系：x=-0.6±0.07, y=1.55+0.023±0.048, z=0.42±0.295
+    assert all(abs(a - b) < 1e-6 for a, b in zip(lo, [-0.67, 1.525, 0.125])), (lo, hi)
+    assert all(abs(a - b) < 1e-6 for a, b in zip(hi, [-0.53, 1.621, 0.715])), (lo, hi)
 
+    # ---- traffic_light_2（横排）：SDF pose "-0.4 -1.55 0 0 0 3.14159" ----
+    # housing box(0.59,0.05,0.14) @ z=0.41 -> size (0.59, 0.096, 0.14)
     tl2 = find_object(objects, "traffic_light_2")
-    # 横排：灯在 y=±0.28, 半径 0.09 -> 跨度 0.74
-    assert abs(tl2["size"][1] - 0.74) < 1e-6, tl2
+    assert all(
+        abs(a - b) < 1e-5
+        for a, b in zip(tl2["model_pose"], [-0.4, -1.55, 0.0, 0.0, 0.0, 3.14159])
+    ), tl2
+    assert all(abs(a - b) < 1e-6 for a, b in zip(tl2["size"], [0.59, 0.096, 0.14])), tl2
+    assert abs(tl2["center"][2] - 0.41) < 1e-6, tl2
+    lo, hi = world_aabb(tl2)
+    # 绕 Z 转 180°：局部 +y（灯球朝向）反到世界 -y
+    assert all(abs(a - b) < 1e-5 for a, b in zip(lo, [-0.695, -1.621, 0.34])), (lo, hi)
+    assert all(abs(a - b) < 1e-5 for a, b in zip(hi, [-0.105, -1.525, 0.48])), (lo, hi)
 
+    # ---- 人偶立牌：官方规格 高15cm × 宽5cm × 厚0.5cm，贴地摆放 ----
     person = find_object(objects, "person_a1")
-    assert abs(person["size"][2] - 1.83) < 1e-6, person
+    assert all(abs(a - b) < 1e-6 for a, b in zip(person["size"], [0.05, 0.005, 0.15])), person
+    assert abs(person["model_pose"][2] - 0.075) < 1e-6, person       # 立牌中心离地 7.5cm
+    lo, hi = world_aabb(person)
+    assert abs(lo[2] - 0.0) < 1e-6 and abs(hi[2] - 0.15) < 1e-6, (lo, hi)
+    # A 区中线 y=0.625，立牌厚 0.5cm
+    assert abs(lo[1] - 0.6225) < 1e-6 and abs(hi[1] - 0.6275) < 1e-6, (lo, hi)
+    assert abs(lo[0] + 1.105) < 1e-6 and abs(hi[0] + 1.055) < 1e-6, (lo, hi)
 
-    plate = find_object(objects, "car_a/plate_front")
-    assert abs(plate["size"][0] - 0.5) < 1e-6 and abs(plate["center"][1] - 2.0) < 1e-6
+    # ---- 车牌：官方规格 9.5×3cm，贴在车背景立牌正面（局部 -0.08, 0.0035, -0.09）----
+    for name, py in (("car_1/plate", -1.75), ("car_2/plate", -1.15), ("car_3/plate", -0.55)):
+        plate = find_object(objects, name)
+        assert all(abs(a - b) < 1e-6 for a, b in zip(plate["size"], [0.095, 0.002, 0.03])), plate
+        assert abs(plate["model_pose"][0] - 1.7) < 1e-6, plate
+        assert abs(plate["model_pose"][1] - py) < 1e-6, plate
+        assert abs(plate["model_pose"][2] - 0.125) < 1e-6, plate     # 车背景立牌中心高
+        assert all(
+            abs(a - b) < 1e-6 for a, b in zip(plate["center"], [-0.08, 0.0035, -0.09])
+        ), plate
+        lo, hi = world_aabb(plate)
+        # 车牌世界系中心 = (1.62, py+0.0035, 0.035)
+        assert abs((lo[0] + hi[0]) / 2.0 - 1.62) < 1e-6, (lo, hi)
+        assert abs((lo[1] + hi[1]) / 2.0 - (py + 0.0035)) < 1e-6, (lo, hi)
+        assert abs((lo[2] + hi[2]) / 2.0 - 0.035) < 1e-6, (lo, hi)
 
 
 # ---------------------------------------------------------------- 3. 决策逻辑
@@ -279,13 +374,22 @@ def det(cls_id, x1, y1, x2, y2, score=0.9):
 
 
 def test_distance_estimation():
-    # 长边 100px, 真实 0.76m -> 554.256*0.76/100 = 4.21m
-    d = det(CLS_TL_RED, 310, 190, 330, 290)
-    assert abs(estimate_distance_m(d, FY) - 4.2123) < 0.01
+    # 同一像素长边(100px)下，估计距离与目标真实长边成正比：Z = fy * extent / 100
+    #   灯箱 0.59m  -> 554.2563*0.59/100 = 3.2701m
+    #   人偶 0.15m  -> 0.8314m
+    #   车牌 0.095m -> 0.5265m
+    # 类别不同、框一样大，距离必须拉开差距（extent 表错了这里立刻就会暴露）
+    same_box = (310, 190, 330, 290)           # 100px 长边
+    assert abs(estimate_distance_m(det(CLS_TL_RED, *same_box), FY) - 3.2701) < 0.01
+    assert abs(estimate_distance_m(det(CLS_TL_YELLOW, *same_box), FY) - 3.2701) < 0.01
+    assert abs(estimate_distance_m(det(CLS_TL_GREEN, *same_box), FY) - 3.2701) < 0.01
+    assert abs(estimate_distance_m(det(CLS_PERSON_COMMUNITY, *same_box), FY) - 0.8314) < 0.01
+    assert abs(estimate_distance_m(det(CLS_PERSON_NONCOMMUNITY, *same_box), FY) - 0.8314) < 0.01
+    assert abs(estimate_distance_m(det(CLS_PLATE, *same_box), FY) - 0.5265) < 0.01
 
 
 def test_red_light_stop():
-    near = det(CLS_TL_RED, 310, 190, 330, 290)   # 100px -> 4.21m < 5m
+    near = det(CLS_TL_RED, 310, 190, 330, 290)   # 100px -> 3.27m < 5m
     res = decide([near], fy=FY, image_width=640)
     assert res.action is Action.STOP, res
     assert res.state == "red"
@@ -293,7 +397,7 @@ def test_red_light_stop():
 
 
 def test_red_light_slow_when_far():
-    far = det(CLS_TL_RED, 310, 210, 330, 250)    # 40px -> 10.53m > 5m
+    far = det(CLS_TL_RED, 310, 210, 330, 250)    # 40px -> 8.18m > 5m
     res = decide([far], fy=FY, image_width=640)
     assert res.action is Action.SLOW, res
     assert 0.0 < res.speed_scale < 1.0
@@ -335,8 +439,8 @@ def test_nearest_light_wins_by_area():
 
 
 def test_yellow_policies():
-    far = det(CLS_TL_YELLOW, 310, 210, 330, 250)     # 10.53m
-    near = det(CLS_TL_YELLOW, 300, 150, 340, 300)    # 150px -> 2.81m
+    far = det(CLS_TL_YELLOW, 310, 210, 330, 250)     # 40px -> 8.18m
+    near = det(CLS_TL_YELLOW, 300, 150, 340, 300)    # 150px -> 2.18m
 
     assert decide([far], fy=FY, image_width=640, yellow_policy="stop_if_far").action is Action.STOP
     assert decide([near], fy=FY, image_width=640, yellow_policy="stop_if_far").action is Action.GO

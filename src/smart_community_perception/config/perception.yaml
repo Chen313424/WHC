@@ -7,6 +7,8 @@
 # 误检太多           -> 升 conf（如 0.45）或升 min_score
 # 车在路口前“瞎停”   -> 检查 roi_x_ratio（只信画面中央的红绿灯）
 # 推理太慢           -> 降 imgsz 到 416/320，或降 min_interval 限频
+# 巡检一直等绿灯超时 -> 查 publish_light_state / light_state_topic 是否对得上
+# 巡检 capture 超时  -> 查 capture_topic / result_topic，以及节点是否起来了
 
 /yolo_detector:
   ros__parameters:
@@ -24,6 +26,17 @@
     publish_debug_image: true
     publish_vision_msgs: true
     min_interval: 0.0   # >0 时限频，例如 0.1 = 最多 10Hz
+
+    # ---------------- 巡检接口（导航组 community_patrol 的契约） ----------------
+    # 巡检订阅 /traffic_light/state，只认大写 'GREEN'（其余一律停在停止线前）；
+    # 它把 /patrol/capture 发出来后会阻塞等 /detection/result，收到任意一条就继续。
+    publish_light_state: true
+    light_state_topic: "/traffic_light/state"
+    light_state_rate: 8.0              # 灯态发布频率 Hz（用定时器，不受推理抖动影响）
+    capture_topic: "/patrol/capture"   # 订阅巡检的识别请求（JSON）
+    result_topic: "/detection/result"  # 回识别结果（JSON）
+    result_min_score: 0.35             # 人数统计/挑车牌框的最小置信度（与 conf 独立）
+    plate_textures_dir: ""             # 车牌模板贴图目录；留空 = 自动找 smart_community_sim/textures
 
 /traffic_controller:
   ros__parameters:

@@ -51,9 +51,10 @@ from .geometry import (
     yolo_line,
 )
 from .traffic_rules import (
-    CLS_PERSON,
-    CLS_PLATE,
     CLASS_NAMES,
+    CLS_PERSON_COMMUNITY,
+    CLS_PERSON_NONCOMMUNITY,
+    CLS_PLATE,
     STATE_TO_TL_CLASS,
     traffic_light_state_from_sim_time,
 )
@@ -76,7 +77,11 @@ class AutoLabelCapture(Node):
         self.declare_parameter("odom_topic", "/odom")
 
         # spawn 位姿，必须与 launch 里 ros_gz_sim create 的 x/y/z/Y 一致
-        self.declare_parameter("world_to_odom", [32.0, 14.0, 0.05, 0.0, 0.0, 1.5708])
+        # ★ 世界系 -> odom 系：必须与本车在 world 里的出生位姿一致，
+        #   否则投影出来的框会整体偏移/方向反了。
+        #   2026-10 场地重建后 spawn 是 (1.3, 1.3, 0.05) 朝 -Y（yaw = -1.5708）；
+        #   旧值 [32, 14, ..., 1.5708] 是 88x44m 城市场景的，会导致标注全错。
+        self.declare_parameter("world_to_odom", [1.3, 1.3, 0.05, 0.0, 0.0, -1.5708])
         # robot.xacro: base_footprint -> base_link = (0, 0, wheel_radius)
         self.declare_parameter("base_footprint_to_base_link_z", 0.05)
         # robot.xacro: base_link -> camera_link = (base_length/2, 0, base_height/2+0.05)
@@ -95,7 +100,9 @@ class AutoLabelCapture(Node):
 
         # 红绿灯时序，必须与 world SDF 的插件参数一致
         self.declare_parameter("green_time", 15.0)
-        self.declare_parameter("yellow_time", 3.0)
+        # ★ 必须与 world SDF 里 TrafficLightSystem 插件的参数逐字一致（新场景是 15/5/10），
+        #   否则自动标注在黄灯那一段会把真值标成红/绿，训练出来的颜色判断是错的。
+        self.declare_parameter("yellow_time", 5.0)
         self.declare_parameter("red_time", 10.0)
 
         gp = self.get_parameter
@@ -231,8 +238,10 @@ class AutoLabelCapture(Node):
             cls_name = obj["class"]
             if cls_name == CLASS_TRAFFIC_LIGHT:
                 cls_id = STATE_TO_TL_CLASS[state]
-            elif cls_name == "person":
-                cls_id = CLS_PERSON
+            elif cls_name == "person_community":
+                cls_id = CLS_PERSON_COMMUNITY
+            elif cls_name == "person_noncommunity":
+                cls_id = CLS_PERSON_NONCOMMUNITY
             elif cls_name == "license_plate":
                 cls_id = CLS_PLATE
             else:

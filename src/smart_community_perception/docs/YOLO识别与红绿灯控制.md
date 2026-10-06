@@ -10,20 +10,31 @@
 
 ## 1. 类别定义
 
-| id | 类别 | 来源 | 真实尺寸（SDF 实测） |
-|----|------|------|----------------------|
-| 0 | `traffic_light_red` | `traffic_light_1/2` 灯箱+灯球 | 竖排 0.24×0.18×0.78 / 横排 0.18×0.74×0.24 |
+> ★ 2026-10 更新：建模组把场景从 88×44m 城市重建为 **4.2×4.2m 省赛场地**，
+> 物料尺寸整体小了一个量级；同时按赛题要求把「人偶」拆成
+> **社区 / 非社区** 两类。下表是新场景下 `smart_community_sdf` 实测值。
+
+| id | 类别 | 来源 | 真实尺寸（SDF 实测，宽×厚×高） |
+|----|------|------|-------------------------------|
+| 0 | `traffic_light_red` | `traffic_light_1/2` 的 housing+灯球 | 竖排 0.14×0.096×0.59 / 横排 0.59×0.096×0.14 |
 | 1 | `traffic_light_yellow` | 同上 | 同上 |
 | 2 | `traffic_light_green` | 同上 | 同上 |
-| 3 | `person` | `person_a1~a5`、`person_b1~b5` | 0.5×0.63×1.83 |
-| 4 | `license_plate` | `car_a/b/c` 的 `plate_front/rear` | 0.5×0.02×0.16 |
+| 3 | `person_community` | `person_a1~a5`、`person_b1~b5`、`person_s1~s6`（16 个） | 0.05×0.005×0.15 |
+| 4 | `person_noncommunity` | `person_f1`、`person_f2`（2 个） | 0.05×0.005×0.15 |
+| 5 | `license_plate` | `car_1/2/3` 里的 `plate` visual | 0.095×0.002×0.03 |
+
+**为什么人偶要拆成两类**：赛题要求「非社区人员辨别」，靠后处理分析颜色
+既不可靠也不好解释。世界 SDF 里这两类用的是不同贴图
+（`person_community_NN.png` / `person_noncommunity_NN.png`），
+自动标注时按 albedo 直接给不同类别 id，模型一步到位。
 
 **为什么把红绿灯拆成三个类**：控制端只关心「现在能不能走」。
 拆成三个类后，模型直接输出状态，控制端不需要再做颜色分析，
 也不会出现「检测到灯但判断不出颜色」的中间态。
 
-> 灯箱的包围盒**故意不包含灯杆**。灯杆又细又高（2.6 m），
-> 混进包围盒会把标注框拉成细长条，既不利于训练，也会破坏距离估计。
+> 灯箱的包围盒**故意不包含灯腿**（`leg_l` / `leg_r`，0.025×0.025×0.3~0.48）。
+> 灯腿又细又长，混进包围盒会把标注框拉成细长条，既不利于训练，
+> 也会破坏距离估计。`tools/sdf_to_objects.py` 里用 `TRAFFIC_LIGHT_SKIP` 排除它们。
 
 ---
 
@@ -32,11 +43,17 @@
 `worlds/smart_community.sdf` 里的插件时序是：
 
 ```
-phase = fmod(simTime, 28)         # 28 = 15 + 3 + 10
+phase = fmod(simTime, 30)         # 30 = 15 + 5 + 10
 phase < 15        -> 绿灯
-15 <= phase < 18  -> 黄灯
-phase >= 18       -> 红灯
+15 <= phase < 20  -> 黄灯
+phase >= 20       -> 红灯
 ```
+
+★ **黄灯是 5 秒不是 3 秒**：官方赛题文件写的是 3 秒，但建模组交付的 SDF 里
+插件参数是 `green_time=15 / yellow_time=5 / red_time=10`。
+本文件与 `traffic_rules.py`、`autolabel_capture` 的黄灯默认值**必须跟 SDF 一致**，
+否则自动标注会在黄灯那一段把真值标成红/绿，训练出来的颜色判断是错的
+（这个坑实际踩过：三处默认值一度不一致）。改插件参数时三处都要同步改。
 
 这是**仿真时间的纯函数**，所以自动标注不需要看画面就能拿到绝对正确的类别。
 `smart_community_perception/traffic_rules.py` 里的
@@ -222,7 +239,8 @@ Invoke-WebRequest -Uri https://hf-mirror.com/Ultralytics/YOLO11/resolve/main/yol
 大概率是世界位姿链对不上。检查：
 1. `smart_community_sim/launch/smart_community.launch.py` 里 `spawn` 的
    `x/y/z/Y` 是否与 `autolabel_capture` 的 `world_to_odom` 参数一致
-   （默认 `[32, 14, 0.05, 0, 0, 1.5708]`）
+   （新场景默认 `[1.3, 1.3, 0.05, 0, 0, -1.5708]`；旧城市场景是 `[32, 14, ...]`，
+   两者混用会让标注框整体偏移/方向反了）
 2. `robot.xacro` 改过相机外参的话，同步 `base_link_to_camera`（默认 `[0.15, 0, 0.10]`）
 
 **红绿灯标注全是同一个颜色**
@@ -238,15 +256,19 @@ Invoke-WebRequest -Uri https://hf-mirror.com/Ultralytics/YOLO11/resolve/main/yol
 
 ## 8. 离线自检
 
-不需要 ROS / Gazebo，只要有 numpy：
+不需要 ROS / Gazebo，只要有 numpy + Pillow：
 
 ```bash
-python test/test_offline.py
+cd src/smart_community_perception
+python test/test_offline.py        # 24 个用例：时序真值、针孔投影、光学系方向约定、
+                                   #   世界→相机位姿链端到端投影、决策边界、
+                                   #   生成的真值框与 SDF 是否一致
+python test/test_plate_ocr.py      # 14 个用例：车牌切字、三张已知车牌的字符还原、
+                                   #   缩放/模糊/亮度扰动后的鲁棒性、退化输入不误报
+python test/test_result_payload.py # 巡检接口的结果 JSON 构造（三种 task 的正常与缺数据分支）
 ```
 
-覆盖 21 个用例：时序真值、针孔投影、**光学系方向约定**、
-世界→相机位姿链端到端投影、决策边界、生成的真值框与 SDF 是否一致。
-改代码后先跑它。
+改代码后先跑这三个。
 
 ---
 
@@ -259,8 +281,9 @@ smart_community_perception/
 │   ├── traffic_rules.py            # 类别、时序真值、决策（无 ROS 依赖）
 │   ├── messages.py                 # 检测结果 JSON 编解码
 │   ├── autolabel_capture_node.py   # Gazebo 真值自动标注
-│   ├── yolo_detector_node.py       # 推理
+│   ├── yolo_detector_node.py       # 推理 + 巡检接口（发灯态、响应 capture）
 │   └── traffic_controller_node.py  # 红绿灯控制
+│   └── plate_ocr.py                # 车牌字符输出（模板匹配，无 ROS 依赖）
 ├── config/
 │   ├── world_objects.yaml          # 自动生成：18 个目标的 3D 真值框
 │   └── perception.yaml             # 节点参数
@@ -271,6 +294,61 @@ smart_community_perception/
 │   ├── split_dataset.py            # train/val 划分 + data.yaml
 │   ├── train_yolo.py               # 训练
 │   └── setup_train_env.ps1         # Windows 训练环境一键配置
-├── test/test_offline.py
+├── test/
+│   ├── test_offline.py             # 几何/时序/决策（24）
+│   ├── test_plate_ocr.py           # 车牌字符输出（14）
+│   └── test_result_payload.py      # 巡检接口结果 JSON（51）
 └── models/                         # 权重放这里（默认 whc_yolo.pt）
 ```
+
+---
+
+## 10. 与巡检节点（导航组）的接口契约
+
+`community_patrol` 的站点表里每个站点带 `action` / `task`，它靠下面三个话题
+跟视觉组对接。**这套契约是导航组定的，感知侧只负责实现**：
+
+| 话题 | 类型 | 方向 | 说明 |
+|------|------|------|------|
+| `/perception/detections` | `std_msgs/String`(JSON) | 感知 → 全车 | 每帧检测结果（`messages.py` 编解码） |
+| `/traffic_light/state` | `std_msgs/String` | 感知 → 巡检 | `RED` / `YELLOW` / `GREEN` / `UNKNOWN`（巡检 `strip().upper()` 后**只在 GREEN 时放行**） |
+| `/patrol/capture` | `std_msgs/String`(JSON) | 巡检 → 感知 | 到站后请求识别：`{waypoint_id, task, zone, slot, target, stamp}` |
+| `/detection/result` | `std_msgs/String`(JSON) | 感知 → 巡检 | 对上面请求的回应（`schema = "whc.result/1"`） |
+
+站点表里的三种 `task`：
+
+| task | 站点 | 输出 |
+|------|------|------|
+| `outsider_detect` | `outsider_n`(target=person_f1)、`outsider_s`(target=person_f2) | 社区/非社区人偶数量 + `target_found` |
+| `crowd_count` | `sidewalk_n`、`zone_a`、`zone_b` | 社区/非社区人偶数量 |
+| `plate_ocr` | `park_2`(slot=2)、`park_3`(slot=3) | `plate`（如 `苏A·B8Q62`）+ 逐字 + OCR 得分 |
+
+**实现位置**：这些发布/订阅都做在 `yolo_detector_node` 里，不另开节点 ——
+本机是内存紧张的虚拟机，再订阅一路 `/camera/image_raw` 会多出约
+4.6 MB/s 的 DDS 流量；检测节点本来就持有最新图像与检测结果，复用最省。
+
+> ⚠️ 两个实测注意点：
+> 1. **`/detection/result` 必须"有问必答"**：哪怕还没出图、task 不认识、
+>    非法 JSON，也要回一条 `ok:false` + `reason`。不然巡检会一直等到
+>    `capture_wait_timeout` 超时才继续（日志表现为「未在 60s 内收到识别结果」）。
+> 2. **停车点必须能看到灯箱**：契约只有 `GREEN` 才放行，视野里没灯就只能发
+>    `UNKNOWN`，巡检会等满 `light_wait_timeout` 再走（不中断流程但浪费时间）。
+>    好在本场地两组灯由同一个插件驱动、相位同步，按面积取最大那盏是安全的。
+
+### 车牌字符输出（`plate_ocr.py`）
+
+仿真的 3 张车牌是固定贴图（`苏A·B8Q62` / `黑T·U1KG9` / `京C·HUU42`），
+字体排版完全一致，所以用**模板匹配**而不是训练字符分类器：
+
+1. 车牌框缩放到贴图标准尺寸（380×120）→ **Otsu 自适应二值化**
+   （原来写死阈值 150，画面偏暗时切不出字）
+2. 先剥掉外圈白框（`plate_1` 的框是内缩 2~3 像素的），再按竖直投影自适应切字
+3. 逐字与模板库做归一化互相关，取最高分
+4. 用「已知车牌白名单 + 编辑距离」做一致性校对；字符级不可信时才用整牌匹配兜底，
+   且**整牌得分不够高就报不确定**（宁可返回 `?` 也不给乱猜的字符串）
+
+字符模板用**灰度 32×64** 而不是二值小图：低分辨率下 `8`/`B`、`0`/`Q` 在
+二值小图上会混淆（实测把 `苏A·B8Q62` 认成 `苏A·BBQ62`）。
+
+`plate_textures_dir` 留空时会自动找 `smart_community_sim` 的 share 目录；
+离线跑测试时用源码树相对路径即可。

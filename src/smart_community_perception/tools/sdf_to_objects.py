@@ -175,12 +175,25 @@ def collect_model_visuals(model: ET.Element):
 
 TRAFFIC_LIGHT_PREFIX = "traffic_light"
 PERSON_PREFIX = "person_"
-# 灯杆又细又高，混进包围盒会把标注框拉成一条长条，训练时反而干扰，所以排除。
-TRAFFIC_LIGHT_SKIP = {"pole", "pole_col", "pole_c"}
+# 灯腿/灯杆又细又高，混进包围盒会把标注框拉成一条长条，训练时反而干扰，所以排除。
+# ★ 2026-10 场景重建后灯腿的 visual 名从 pole* 改成了 leg_l / leg_r，
+#   两套名字都留着，兼容两种场景，避免以后换模型又漏掉。
+TRAFFIC_LIGHT_SKIP = {"leg_l", "leg_r", "pole", "pole_col", "pole_c"}
 
 CLASS_TRAFFIC_LIGHT = "traffic_light"
-CLASS_PERSON = "person"
+CLASS_PERSON_COMMUNITY = "person_community"
+CLASS_PERSON_NONCOMMUNITY = "person_noncommunity"
 CLASS_PLATE = "license_plate"
+# 兼容旧名
+CLASS_PERSON = CLASS_PERSON_COMMUNITY
+
+
+def _first_albedo(model: ET.Element) -> str:
+    """取模型里第一个 <albedo_map> 的文本（用来区分人偶的社区/非社区贴图）。"""
+    for tag in model.iter("albedo_map"):
+        if tag.text:
+            return tag.text.strip()
+    return ""
 
 
 def build_objects(sdf_path: str):
@@ -231,17 +244,26 @@ def build_objects(sdf_path: str):
                 )
             continue
 
-        # --- 人偶 ---
+        # --- 人偶：按贴图区分【社区 / 非社区】 ---
+        #   世界 SDF 里 person_a*/b*/s* 用的是 person_community_NN.png，
+        #   person_f1/f2 用的是 person_noncommunity_NN.png。赛题要求辨别
+        #   非社区人员，所以真值里就必须把这两类分开，模型才学得会。
         if name.startswith(PERSON_PREFIX):
             keep = [v for v in visuals if not v[0].startswith("plate")]
             if keep:
                 c, s = aabb_from_points(
                     corners_of_aabb(v[1], v[2])[i] for v in keep for i in range(8)
                 )
+                albedo = _first_albedo(model)
+                cls = (
+                    CLASS_PERSON_NONCOMMUNITY
+                    if "noncommunity" in albedo
+                    else CLASS_PERSON_COMMUNITY
+                )
                 objects.append(
                     {
                         "name": name,
-                        "class": CLASS_PERSON,
+                        "class": cls,
                         "model_pose": pose,
                         "center": c,
                         "size": s,

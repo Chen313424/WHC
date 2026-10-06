@@ -22,14 +22,14 @@ import argparse
 import os
 import random
 import shutil
+import sys
 
-CLASS_NAMES = [
-    "traffic_light_red",
-    "traffic_light_yellow",
-    "traffic_light_green",
-    "person",
-    "license_plate",
-]
+# ★ 类别清单以 smart_community_perception.traffic_rules.CLASS_NAMES 为【唯一来源】，
+#   不要在这里再抄一份。2026-10 就把人偶拆成了社区/非社区两类；如果这里留着旧的
+#   5 类清单，写出的 data.yaml 会和模型/推理端对不上（类别 id 整体错位）。
+#   traffic_rules 是纯逻辑模块（只依赖 stdlib），可以直接 import，无需 ROS 环境。
+sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")))
+from smart_community_perception.traffic_rules import CLASS_NAMES  # noqa: E402
 
 
 def collect(dataset: str) -> list[str]:

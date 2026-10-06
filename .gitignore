@@ -15,3 +15,14 @@ __pycache__/
 .dsh-scratch/
 .dsh-meow/
 .tmpdeps/
+
+# 训练环境与数据集（体积大，不进版本库）
+.venv-train/
+.pylibs/
+.piptmp/
+.piptest/
+whc_synth/
+runs/
+*.pt
+*.onnx
+

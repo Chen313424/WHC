@@ -1,0 +1,21 @@
+# ---------------------------------------------------------------------------
+#  shell 脚本必须用 LF 存储与检出
+# ---------------------------------------------------------------------------
+#  为什么需要这一条：
+#    仓库 blob 里 .sh 本来就是 LF，但 Windows 上 core.autocrlf=true 会把
+#    工作区检出成 CRLF。这些脚本是要 rsync 进 Linux guest 里用 bash 执行的，
+#    CRLF 会让 bash 报：
+#        run_patrol_demo.sh: line 37: $'\r': command not found
+#        syntax error near unexpected token `$'do\r'`
+#    本机实测就因此卡住过一次（同步覆盖后又变回 CRLF）。
+#    显式声明 eol=lf 后，无论 autocrlf 怎么设，检出都是 LF。
+# ---------------------------------------------------------------------------
+*.sh text eol=lf
+
+# Windows 侧脚本保持 CRLF
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 本文件自身也用 LF（否则 core.autocrlf 会反复把它标记为已修改）
+.gitattributes text eol=lf

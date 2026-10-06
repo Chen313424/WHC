@@ -10,3 +10,8 @@ __pycache__/
 # Editor
 .vscode/
 .idea/
+
+# 临时/本地文件
+.dsh-scratch/
+.dsh-meow/
+.tmpdeps/

@@ -598,9 +598,80 @@ collision_monitor:
       enabled: True
 
 # -----------------------------------------------------------------------------
-# docking_server（自动回充）已移除
+# docking_server（自动回充）—— 必须写！不能省！
 # -----------------------------------------------------------------------------
-# 本场地没有自动充电桩任务，且 Jazzy 的 docking 依赖 opennav_docking 插件，
-# 它不在 navigation2 主包里，需额外安装 ros-jazzy-opennav-docking。为减少依赖、
-# 避免 bringup 因找不到插件而失败，这里不配置 docking_server。
-# 若后续加入充电桩，请先 sudo apt install ros-jazzy-opennav-docking 再补回本段。
+# ★★ 为什么"本场地根本没有充电桩"却仍然必须配置这一段：
+#
+#   nav2_bringup 的 navigation_launch.py 在 use_composition:=False 时，
+#   是【无条件】把 docking_server 拉起来的 —— launch 里压根没有
+#   use_docking 这样的开关可以关掉它。
+#
+#   参数文件里没有 docking_server 段时，opennav_docking 在 configure 阶段直接报：
+#       [ERROR] [docking_server]: Charging dock plugins not given!
+#       [ERROR] [docking_server]: An error occurred while getting the dock plugins!
+#   然后 cleanup 退出，lifecycle_manager_navigation 随之：
+#       [ERROR] Failed to change state for node: docking_server
+#       [ERROR] Failed to bring up all requested nodes. Aborting bringup.
+#
+#   —— 整条导航栈（controller_server / planner_server / bt_navigator …）
+#   全部停在 inactive，map_server / amcl 也拿不到 bond。
+#   外部表现是"巡检节点发导航目标永远等不到接受"，从日志上完全看不出
+#   根因在 docking。★ 本机实测正是被这个坑拦下来的（0/5 节点激活，365s 超时）。
+#
+#   注意 opennav_docking 是随 ros-jazzy-navigation2 一起装上的，
+#   不需要额外 apt install —— 之前的注释在这点上判断有误。
+#
+#   我们没有任何充电桩（docks 留空），这个节点启动后就是空转，
+#   唯一作用是让生命周期能顺利走完。参数照 Nav2 官方默认值，
+#   只把 base_frame 对齐成本车实际使用的 base_footprint。
+# -----------------------------------------------------------------------------
+docking_server:
+  ros__parameters:
+    use_sim_time: True
+    controller_frequency: 50.0
+    initial_perception_timeout: 5.0
+    wait_charge_timeout: 5.0
+    dock_approach_timeout: 30.0
+    undock_linear_tolerance: 0.05
+    undock_angular_tolerance: 0.1
+    max_retries: 3
+    base_frame: "base_footprint"
+    fixed_frame: "odom"
+    dock_backwards: false
+    dock_prestaging_tolerance: 0.5
+
+    # ★ 必须至少给出一个 dock 插件，否则 configure 阶段直接
+    #   "Charging dock plugins not given!" 失败。
+    dock_plugins: ['simple_charging_dock']
+    simple_charging_dock:
+      plugin: 'opennav_docking::SimpleChargingDock'
+      docking_threshold: 0.05
+      staging_x_offset: -0.7
+      use_external_detection_pose: true
+      use_battery_status: false
+      use_stall_detection: false
+
+      external_detection_timeout: 1.0
+      external_detection_translation_x: -0.18
+      external_detection_translation_y: 0.0
+      external_detection_rotation_roll: -1.57
+      external_detection_rotation_pitch: -1.57
+      external_detection_rotation_yaw: 0.0
+      filter_coef: 0.1
+
+    # 本场地没有充电桩：docks 保持默认（空），docking_server 空转。
+    # 将来若加充电桩，在这里补 docks: ['home_dock'] 及其 type/frame/pose。
+
+    controller:
+      k_phi: 3.0
+      k_delta: 2.0
+      v_linear_min: 0.15
+      v_linear_max: 0.15
+      use_collision_detection: true
+      costmap_topic: "local_costmap/costmap_raw"
+      footprint_topic: "local_costmap/published_footprint"
+      transform_tolerance: 0.1
+      projection_time: 5.0
+      simulation_step: 0.1
+      dock_collision_threshold: 0.3
+

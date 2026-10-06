@@ -54,6 +54,23 @@ source "$WS/install/setup.bash"
 SHARE=$(ros2 pkg prefix community_nav)/share/community_nav
 WAYPOINTS="$SHARE/config/community_waypoints.yaml"
 
+# ★ 慢机器上必须放宽单站超时。
+#   patrol_node 的 navigate_timeout 来自站点表 YAML（项目默认 60 秒），
+#   而它的 _wait_future() 用的是 time.monotonic()，也就是【墙钟】。
+#   本机实测实时因子只有 0.04~0.07 → 60 秒墙钟只折合约 2.4~4 秒仿真时间，
+#   小车根本来不及走完一站，于是 11 个站点全部超时跳过（日志里 0 成功/11 失败）。
+#   这里生成一份加大超时的副本【不改项目文件】，用项目自己的 waypoints_file 参数指过去。
+WAYPOINTS_SLOW="$HOME/waypoints_slow.yaml"
+if [ -f "$WAYPOINTS" ]; then
+    sed -E 's/^navigate_timeout:.*/navigate_timeout: 900.0   # 本机实时因子低，放宽到 900 秒墙钟/' \
+        "$WAYPOINTS" > "$WAYPOINTS_SLOW"
+    echo "  已生成放宽超时的站点表: $WAYPOINTS_SLOW"
+    grep -n '^navigate_timeout:' "$WAYPOINTS_SLOW" | sed 's/^/    /'
+else
+    echo "  [!] 找不到 $WAYPOINTS，沿用原文件"
+    WAYPOINTS_SLOW="$WAYPOINTS"
+fi
+
 echo "=============================================================="
 echo "  低开销演示（合成 Nav2 + Nav2 就绪后才开始巡检）"
 echo "=============================================================="
@@ -139,9 +156,11 @@ timeout 8 ros2 topic hz /cmd_vel 2>/dev/null | grep -a 'average rate' | tail -1 
 nohup ros2 run community_patrol patrol_node --ros-args \
     -r __node:=community_patrol \
     -p use_sim_time:=true \
-    -p waypoints_file:="$WAYPOINTS" \
+    -p waypoints_file:="$WAYPOINTS_SLOW" \
     -p autostart:=true \
     -p start_delay:=2.0 \
+    -p light_wait_timeout:=300.0 \
+    -p capture_wait_timeout:=60.0 \
     > /tmp/patrol.log 2>&1 &
 sleep 8
 echo "      patrol 进程数=$(pgrep -f community_patrol | wc -l)"

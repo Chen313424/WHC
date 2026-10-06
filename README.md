@@ -184,7 +184,7 @@ smart_community_ws/
 - 移除 `nav2_params.yaml` 里依赖 `opennav_docking` 的 `docking_server` 段（本场地无充电桩）。
 - 修复巡检节点对 `target` 字段的透传，并统一工作空间路径（原代码多处写死 `~/ros2_ws`）。
 
-> ⚠️ 地图 `src/community_nav/map/community_map.pgm/.yaml` 是当前世界版本的建图产物。
+> ⚠️ 当前世界版本的建图产物是 `src/community_nav/map/` 下的 `community_map.pgm` 与 `community_map.yaml`。
 > **最终世界布局锁定后，请导航组重新建图覆盖**，保证地图与场景完全一致。
 
 ## 10. 常见问题

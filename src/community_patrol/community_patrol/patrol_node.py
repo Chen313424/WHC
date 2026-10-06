@@ -301,7 +301,7 @@ class PatrolNode(Node):
             'task': wp['task'],
             'zone': wp['zone'],
             'slot': wp['slot'],
-            'target': wp['target'],
+            'target': wp.get('target', ''),
             'stamp': time.time(),
         }
         self.last_detection = None

@@ -76,12 +76,14 @@ ros2 topic hz /odom            # 里程计
 ros2 topic hz /camera/image_raw  # 相机图像
 ```
 
-### 5.2 建图
+### 5.2 建图（自主建图，无需遥控）
 
 ```bash
 ros2 launch community_nav mapping.launch.py
-ros2 run teleop_twist_keyboard teleop_twist_keyboard   # 键盘遥控走遍场地
 ```
+
+一键启动后，机器人会经 Nav2 **自主驶过回字形道路的全部 6 段车道**，边跑边建图、
+最后回环闭合（符合复赛「自主建图」评分要求）。跑完后按 5.3 保存地图即可。
 
 ### 5.3 保存地图
 

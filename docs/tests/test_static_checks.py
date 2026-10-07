@@ -89,6 +89,21 @@ def check_use_before_binding(src):
             prev = bind_line.get(name)
             bind_line[name] = lineno if prev is None else min(prev, lineno)
 
+        # ---- ★ 先绑定函数形参 ----
+        # 形参在函数入口（fn.lineno）就已经是绑定状态，
+        # 函数体内"先用参数、再重绑定参数"是合法写法：
+        #     def f(x, y):
+        #         z = x + y      # 使用形参
+        #         x = x / 2      # 重绑定
+        # 早期版本漏掉形参，会对此类代码误报"先用后定义"。
+        for _arg in (list(fn.args.posonlyargs) + list(fn.args.args)
+                     + list(fn.args.kwonlyargs)):
+            bind(_arg.arg, fn.lineno)
+        if fn.args.vararg is not None:
+            bind(fn.args.vararg.arg, fn.lineno)
+        if fn.args.kwarg is not None:
+            bind(fn.args.kwarg.arg, fn.lineno)
+
         # ---- ★ 先处理【推导式】的目标变量 ----
         # 形如
         #     x = "".join(f(a) for a, b in items)

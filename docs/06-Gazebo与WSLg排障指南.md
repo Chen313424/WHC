@@ -29,20 +29,20 @@ xeyes
 > 下面两条是在 Intel Arc 核显 + WSL2 + WSLg 环境下**实际发生并已修复**的问题。
 > 现象很有迷惑性，特此记录。
 
-### 问题一：机器人一生成，gzserver 就段错误崩溃
+### 问题一：机器人一生成，gz sim 就段错误崩溃
 
 **症状：**
 
 终端里看到机器人生成成功了：
 
 ```
-[spawn_entity.py-3] [INFO] ... Spawn status: SpawnEntity: Successfully spawned entity [turtlebot3_waffle]
+[spawn_entity.py-3] [INFO] ... Spawn status: SpawnEntity: Successfully spawned entity [<机器人>]
 ```
 
-**紧接着 gzserver 崩溃：**
+**紧接着 Gazebo 服务端（gz sim）崩溃：**
 
 ```
-[ERROR] [gzserver-1]: process has died [pid 925, exit code -11]
+[ERROR] [gz sim-1]: process has died [pid 925, exit code -11]
 ```
 
 `exit code -11` 就是 **SIGSEGV（段错误）**。
@@ -55,10 +55,7 @@ WSLg 的 D3D12 路径下会崩溃。
 
 **解决办法（二选一）：**
 
-1. **改用不带相机的机器人**（做导航开发够用，激光雷达才是关键）
-   ```bash
-   export TURTLEBOT3_MODEL=burger
-   ```
+1. **先用不带相机的机器人模型**（做导航开发够用，激光雷达才是关键）
 2. **启用软件渲染**（见问题二），软件渲染下相机往往也能正常工作
 
 > ⚠️ **建模组注意：** 如果你们做的机器人模型里带相机，
@@ -112,25 +109,26 @@ export MESA_GLSL_VERSION_OVERRIDE=330
 的位置，**几分钟都没有动静**，窗口也不出现。
 
 **原因：**
-Gazebo Classic 启动时会尝试联网访问模型库 `models.gazebosim.org`
+Gazebo（Harmonic）启动时会尝试联网访问 Fuel 模型库 `fuel.gazebosim.org`
 去下载模型。**这个域名在国内访问极慢或直接超时**，Gazebo 就卡在那里等。
 
 **处理：**
 
 ```bash
-# 1) 关掉模型库联网请求
-echo 'export GAZEBO_MODEL_DATABASE_URI=""' >> ~/.bashrc
-source ~/.bashrc
+# 1) 清掉可能已经损坏的 Fuel 缓存
+rm -rf ~/.gz/fuel
 
-# 2) 清掉可能已经损坏的 Gazebo 缓存
-rm -rf ~/.gazebo
+# 2) 把 Fuel 模型库设为离线模式（Harmonic 用 Fuel，不是 Classic 的 models.gazebosim.org）
+mkdir -p ~/.gz/fuel
+printf 'url: ""\n' > ~/.gz/fuel/config.yaml
 ```
 
 然后重新启动。
 
-> **为什么会这样（答辩素材）：** Gazebo Classic 默认配置了一个在线模型数据库 URI，
+> **为什么会这样（答辩素材）：** Gazebo Harmonic 默认配置了 Fuel 在线模型库，
 > 启动时会尝试同步模型索引。在无外网或网络受限环境下会造成长时间阻塞。
-> 我们的解决方案是把该 URI 置空，改为完全使用本地模型文件，
+> 我们的 world 与全部模型都已内联/本地化，本就不需要联网下载；
+> 若仍卡住，把 Fuel 的 `url` 置空即可改为完全使用本地模型文件，
 > 这也让整个仿真环境**离线可用、结果可复现**。
 
 ---
@@ -138,7 +136,7 @@ rm -rf ~/.gazebo
 ## 二、Gazebo 窗口弹出但全黑 / 花屏 / 一闪就退
 
 **原因：**
-WSLg 下的 OpenGL 版本协商问题。Gazebo Classic 用的 OGRE 渲染引擎
+WSLg 下的 OpenGL 版本协商问题。Gazebo Harmonic 用的 OGRE2 渲染引擎
 **要求 OpenGL 3.3 以上**，而 WSLg 默认上报的版本有时不满足。
 
 **处理（按顺序试，一个不行再试下一个）：**
@@ -164,10 +162,10 @@ source ~/.bashrc
 **③ 想看真正的报错信息**
 
 ```bash
-gzserver --verbose
+gz sim --verbose
 ```
 
-Gazebo 详细日志会打印 OGRE / OpenGL 的具体错误，**把这段贴给我**。
+Gazebo 详细日志会打印 OGRE2 / OpenGL 的具体错误，**把这段贴给我**。
 
 ---
 
@@ -177,14 +175,14 @@ Gazebo 详细日志会打印 OGRE / OpenGL 的具体错误，**把这段贴给�
 
 1. **关掉 Windows 侧占用 GPU 的程序**（浏览器硬件加速、游戏、录屏软件）
 2. **降低 Gazebo 画质**：在 Gazebo 窗口里 `Edit → 关闭 Shadows`；左侧 `Layers` 面板可以关掉不需要的图层渲染
-3. **分离启动 gzserver 与 gzclient**：
+3. **分离启动 server 与 GUI**：
    ```bash
    # 终端 1（无界面，只跑物理引擎 —— 建图和导航其实只需要这个）
-   gzserver
+   gz sim -s
    # 终端 2（只在需要看画面时才开）
-   gzclient
+   gz sim -g
    ```
-   > 录制视频时再开 gzclient，平时调试可以只开 gzserver + RViz，省一半资源。
+   > 录制视频时再开 GUI，平时调试可以只开 `gz sim -s` + RViz，省一半资源。
 4. **降低分辨率**：在 Windows 的 WSL 设置里降低窗口缩放，或把 Gazebo 窗口调小
 5. **确认确实是 GPU 加速**：
    ```bash
@@ -516,7 +514,7 @@ echo "DISPLAY=$DISPLAY  WAYLAND=$WAYLAND_DISPLAY"
 ls -l /dev/dxg 2>/dev/null && echo "GPU 直通 OK" || echo "无 GPU 直通"
 
 # 3) Gazebo 详细日志
-gzserver --verbose 2>&1 | head -40
+gz sim --verbose 2>&1 | head -40
 ```
 
 ---
@@ -530,11 +528,10 @@ gzserver --verbose 2>&1 | head -40
 sed -i '/MESA_GL_VERSION_OVERRIDE/d'   ~/.bashrc
 sed -i '/MESA_GLSL_VERSION_OVERRIDE/d' ~/.bashrc
 sed -i '/LIBGL_ALWAYS_SOFTWARE/d'      ~/.bashrc
-sed -i '/GAZEBO_MODEL_DATABASE_URI/d'  ~/.bashrc
 source ~/.bashrc
 
-# 清 Gazebo 缓存
-rm -rf ~/.gazebo
+# 清 Gazebo（Harmonic）缓存与 Fuel 离线配置
+rm -rf ~/.gz/fuel
 
 # 重启 WSL（在 Windows PowerShell 里执行）
 # wsl --shutdown
@@ -548,11 +545,11 @@ rm -rf ~/.gazebo
 
 | 阶段 | 需要图形界面吗 | 说明 |
 |---|---|---|
-| 建图 | 需要 RViz | **Gazebo 可以不开界面**，`gzserver` 无头运行即可 |
+| 建图 | 需要 RViz | **Gazebo 可以不开界面**，`gz sim -s` 无头运行即可 |
 | 导航调试 | 需要 RViz | 同上 |
 | **录制视频** | **必须** | 要求 Gazebo + RViz 同屏，这一步不能省 |
 
-所以：**先把 gzserver + RViz 这条路跑通**（这条路最稳），
+所以：**先把 `gz sim -s` + RViz 这条路跑通**（这条路最稳），
 把 Gazebo 客户端的显示问题留到录像前再集中解决。
 
 这样即使 Gazebo 界面一直有问题，你的**算法开发和建图进度也不会被阻塞**。

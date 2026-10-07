@@ -190,7 +190,7 @@ for fname, want_declares, want_nodes in [
     ('sim.launch.py', 1, 0),
     ('mapping.launch.py', 4, 3),
     ('mapping_minimal.launch.py', 2, 3),
-    ('navigation.launch.py', 6, 2),
+    ('navigation.launch.py', 7, 2),
 ]:
     try:
         mod = load(fname)

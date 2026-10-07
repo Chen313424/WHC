@@ -111,7 +111,7 @@ def check_use_before_binding(src):
         # 从文本行号看"使用"在"绑定"之前，但语义上完全合法。
         #
         # 早期版本没处理这一点，对合法代码误报（实测踩到过：
-        # 建模组的 generate_world.py 里一句生成器表达式被判成 NameError）。
+        # 仿真组的 generate_world.py 里一句生成器表达式被判成 NameError）。
         # 修法：把推导式的目标变量绑定到【整个推导式表达式的起始行】，
         #      这样推导式内部的任何使用都不会被判为"先用后定义"。
         for comp in ast.walk(fn):

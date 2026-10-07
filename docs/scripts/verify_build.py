@@ -54,7 +54,7 @@ WS = os.path.expanduser('~/smart_community_ws')
 WS_SETUP = os.path.join(WS, 'install', 'setup.bash')
 
 # community_nav 是我们自己的导航包，
-# smart_community_sim 是建模组交付的社区场景包（一并纳入工作空间）
+# smart_community_sim 是仿真组交付的社区场景包（一并纳入工作空间）
 PACKAGES = ['community_nav', 'community_patrol', 'smart_community_sim']
 LAUNCH_FILES = ['sim.launch.py', 'mapping.launch.py', 'mapping_minimal.launch.py',
                 'navigation.launch.py']

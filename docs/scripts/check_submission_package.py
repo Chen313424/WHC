@@ -96,7 +96,7 @@ for name in sorted(os.listdir(SRC)):
 if len(pkgs) >= 2:
     add_ok(f'src 下有 {len(pkgs)} 个 ROS 包：{", ".join(pkgs)}')
 elif pkgs:
-    add_todo(f'src 下只有 {len(pkgs)} 个包（{pkgs[0]}），另有包待建模组交付后加入')
+    add_todo(f'src 下只有 {len(pkgs)} 个包（{pkgs[0]}），另有包待仿真组交付后加入')
 else:
     add_err('src 下没有找到任何含 package.xml 的 ROS 包')
 
@@ -139,7 +139,7 @@ if models:
     add_ok(f'模型文件 {len(models)} 个')
 else:
     add_todo('模型文件（.world / .urdf / .sdf 等）—— 规则明确要求包含。'
-             '**等建模组交付场地与机器人模型后加入**')
+             '**等仿真组交付场地与机器人模型后加入**')
 
 # ---------------------------------------------------------------- 7. 不该打进包的东西
 bad_dirs = []

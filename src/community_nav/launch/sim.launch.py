@@ -7,7 +7,7 @@
     ros2 launch community_nav sim.launch.py
 
 【这个文件为什么这么薄】
-    场景本身由建模组交付的 `smart_community_sim` 包提供：
+    场景本身由仿真组交付的 `smart_community_sim` 包提供：
 
       · worlds/smart_community.sdf        完整社区世界（含 2 组红绿灯）
       · robot/robot.xacro                 巡检机器人（差速底盘 + 360° 雷达 + 相机）
@@ -21,7 +21,7 @@
     我们在这个文件里只加一件事：**启动前的残留进程检查**（见下）。
 
 【为什么整个栈从 Humble + Classic 迁到了 Jazzy + Harmonic】
-    建模组的场景用了三样 Gazebo Classic【完全不支持】的东西：
+    仿真组的场景用了三样 Gazebo Classic【完全不支持】的东西：
       · gz-sim 插件体系（6 个 world 级插件 + 1 个自研红绿灯插件）
       · PBR 材质（<pbr><metal><albedo_map>）—— Classic 用的是 Ogre 材质脚本
       · SDF 1.8 —— Classic 11 上限是 1.7
@@ -92,7 +92,7 @@ def generate_launch_description():
     except Exception as exc:                                   # noqa: BLE001
         raise RuntimeError(
             '\n' + '=' * 70 + '\n'
-            f'找不到建模组的场景包 smart_community_sim。\n\n'
+            f'找不到仿真组的场景包 smart_community_sim。\n\n'
             f'这通常意味着【还没有编译】。请执行：\n'
             f'    cd <你的 ROS2 工作空间根目录>\n'
             f'    colcon build --symlink-install\n'
@@ -106,7 +106,7 @@ def generate_launch_description():
     if not os.path.isfile(scene_launch):
         raise RuntimeError(
             '\n' + '=' * 70 + '\n'
-            f'找不到建模组的场景启动文件：\n  {scene_launch}\n\n'
+            f'找不到仿真组的场景启动文件：\n  {scene_launch}\n\n'
             f'请确认 smart_community_sim 包已编译：\n'
             f'    cd <你的 ROS2 工作空间根目录> && colcon build --symlink-install\n'
             + '=' * 70 + '\n'
@@ -118,7 +118,7 @@ def generate_launch_description():
         'use_sim_time', default_value='true',
         description='使用 Gazebo 仿真时钟（仿真环境必须为 true）')
 
-    # 直接复用建模组的启动文件：世界 + 机器人 + 桥接
+    # 直接复用仿真组的启动文件：世界 + 机器人 + 桥接
     scene = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(scene_launch),
         launch_arguments={'use_sim_time': use_sim_time}.items(),

@@ -38,7 +38,7 @@ def detect_ros_distro():
 
     【为什么要这样】
       本项目最初在 Ubuntu 22.04 + ROS 2 Humble 上开发，
-      后来为了使用建模组交付的社区场景（ROS 2 Jazzy + Gazebo Harmonic），
+      后来为了使用仿真组交付的社区场景（ROS 2 Jazzy + Gazebo Harmonic），
       整个栈迁移到了 Ubuntu 24.04 + Jazzy。
 
       如果把发行版写死，换环境后脚本要么报错、要么更糟——
@@ -105,7 +105,7 @@ def main():
         print('  ❌ 找不到 ROS 2 安装（/opt/ros 下没有发行版）')
         print()
         print('  请先安装 ROS 2。本项目的目标是 Ubuntu 24.04 + ROS 2 Jazzy')
-        print('  （建模组的社区场景是 Jazzy + Gazebo Harmonic 的）。')
+        print('  （仿真组的社区场景是 Jazzy + Gazebo Harmonic 的）。')
         return 1
     print(f'  ROS 2  : {ROS_DISTRO}  ({ROS_SETUP})')
     if not os.path.isfile(ROS_SETUP):
@@ -199,7 +199,7 @@ def main():
 
   然后启动社区场景与建图：
 
-    # 终端 1 —— 社区场景（Gazebo Harmonic，含建模组的完整社区）
+    # 终端 1 —— 社区场景（Gazebo Harmonic，含仿真组的完整社区）
     ros2 launch community_nav sim.launch.py
 
     # 终端 2 —— 建图

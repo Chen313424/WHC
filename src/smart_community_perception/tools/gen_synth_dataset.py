@@ -9,7 +9,7 @@
 
 ★ 2026-10 重写：原来的版本是按【旧的 88x44m 城市场景】画的
 （人偶 0.6x1.83 立板、车牌 0.5x0.16、红绿灯 0.78 长边、单一 person 类），
-与建模组重建后的 4.2x4.2m 省赛场地完全不符。现在全部改成：
+与仿真组重建后的 4.2x4.2m 省赛场地完全不符。现在全部改成：
   · 几何比例严格照 smart_community.sdf 里各 visual 的 <size>
   · 人偶/车牌/车背景全部贴【真实贴图】（person_community_NN.png、
     person_noncommunity_NN.png、plate_N.png、car_background.png），

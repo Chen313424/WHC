@@ -108,7 +108,7 @@ PKG_DIRS = [
     'turtlebot3_gazebo/models/turtlebot3_waffle',
 ]
 TB3_FILES = [
-    # 建模组的场景包（社区世界 + 一键启动）
+    # 仿真组的场景包（社区世界 + 一键启动）
     'smart_community_sim/launch/smart_community.launch.py',
     'smart_community_sim/worlds/smart_community.sdf',
     'nav2_bringup/launch/bringup_launch.py',
@@ -206,7 +206,7 @@ for fname, want_declares, want_nodes in [
                f'{type(exc).__name__}: {exc}\n{traceback.format_exc()[-300:]}')
 
 # ==============================================================================
-#  测试 4：sim.launch.py 复用建模组场景，且场景缺失时报错可诊断
+#  测试 4：sim.launch.py 复用仿真组场景，且场景缺失时报错可诊断
 #  （世界/机器人/桥接都由 smart_community_sim 提供，我们只做启动前检查）
 # ==============================================================================
 try:
@@ -216,10 +216,10 @@ try:
     inc = includes(ld)
     paths = [str(getattr(e.source, 'path', '')) for e in inc]
     ok = any('smart_community.launch.py' in p for p in paths)
-    record(ok, '测试 sim 复用了建模组的场景启动文件',
+    record(ok, '测试 sim 复用了仿真组的场景启动文件',
            f'引入的启动文件数={len(paths)}')
 except Exception as exc:                                        # noqa: BLE001
-    record(False, '测试 sim 复用建模组场景', f'{type(exc).__name__}: {exc}')
+    record(False, '测试 sim 复用仿真组场景', f'{type(exc).__name__}: {exc}')
 
 # ==============================================================================
 #  测试 4b：场景包缺失（未编译）时必须直接报错并给出编译命令
@@ -232,7 +232,7 @@ try:
         record(False, '测试 sim 缺场景包时报错可诊断', '本应抛错却正常返回')
     except RuntimeError as exc:
         msg = str(exc)
-        ok = '找不到建模组' in msg and 'colcon build' in msg
+        ok = '找不到仿真组' in msg and 'colcon build' in msg
         record(ok, '测试 sim 缺场景包时报错可诊断',
                '报错含编译提示' if ok else msg.replace('\n', ' | ')[:200])
 except Exception as exc:                                        # noqa: BLE001
